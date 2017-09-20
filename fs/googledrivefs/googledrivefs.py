@@ -23,6 +23,8 @@ def _Escape(name):
 	name = name.replace("'", r"\'")
 	return name
 
+_folderMimeType = "application/vnd.google-apps.folder"
+
 class GoogleDriveFS(FS):
 	def __init__(self, credentials):
 		super().__init__()
@@ -62,6 +64,7 @@ class GoogleDriveFS(FS):
 		if parentId is not None:
 			query = query +  f" and '{parentId}' in parents"
 		result = self.drive.files().list(q=query, fields="files(id,mimeType,kind,name,createdTime,modifiedTime,size)").execute()
+		return results["files"]
 
 	def _itemFromPath(self, path):
 		metadata = None
@@ -76,7 +79,7 @@ class GoogleDriveFS(FS):
 		return metadata
 
 	def _infoFromMetadata(self, metadata): # pylint: disable=no-self-use
-		isFolder = (metadata["mimeType"] == "application/vnd.google-apps.folder")
+		isFolder = (metadata["mimeType"] == _folderMimeType)
 		rfc3339 = "%Y-%m-%dT%H:%M:%S.%fZ"
 		rawInfo = {
 			"basic": {
@@ -105,19 +108,33 @@ class GoogleDriveFS(FS):
 		pass
 
 	def listdir(self, path):
-		pass
+		return [x.name for x in self.scandir(path)]
 
 	def makedir(self, path, permissions=None, recreate=False):
-		pass
+		parentMetadata = self._itemFromPath(dirname(path))
+		if metadata is None:
+			raise DirectoryExpected(path=path)
+		newMetadata = {"name": basename(path), "parents": [parentMetadata["id"]], "mimeType": _folderMimeType}
+		newMetadataId = self.drive.files().create(body=newMetadata, fields="id").execute()
 
 	def openbin(self, path, mode="r", buffering=-1, **options):
 		pass
 
 	def remove(self, path):
-		pass
+		metadata = self._itemFromPath(path)
+		self.drive.files().delete(metadata["id"])
 
 	def removedir(self, path):
-		pass
+		metadata = self._itemFromPath(path)
+		self.drive.files().delete(metadata["id"])
+
+	# non-essential method - for speeding up walk
+	def scandir(self, path):
+		metadata = self._itemFromPath(path)
+		if metadata is None:
+			raise ResourceNotFound(path=path)
+		children = self._childrenById(metadata["id"])
+		return [_infoFromMetadata(x) for x in children]
 
 def setup_test():
 	from argparse import Namespace
@@ -128,7 +145,7 @@ def setup_test():
 	from oauth2client.tools import run_flow
 	clientId = environ["GOOGLE_DRIVE_CLIENT_ID"]
 	clientSecret = environ["GOOGLE_DRIVE_CLIENT_SECRET"]
-	credentialsPath = environ["GOOGLE_CREDENTIALS_PATH"]
+	credentialsPath = environ["GOOGLE_DRIVE_CREDENTIALS_PATH"]
 	scope = "https://www.googleapis.com/auth/drive"
 	storage = Storage(credentialsPath)
 	credentials = storage.get()
@@ -145,3 +162,5 @@ def setup_test():
 def test_getinfo():
 	fs, testDir = setup_test()
 	info_ = fs.getinfo(testDir + "/test.txt")
+
+	fs.remove(testDir + "/test.txt")
