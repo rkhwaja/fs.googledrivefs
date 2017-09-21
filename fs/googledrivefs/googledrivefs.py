@@ -1,14 +1,19 @@
+from contextlib import contextmanager
 from datetime import datetime
 from hashlib import md5
-from os.path import join
-from tempfile import gettempdir
+from io import BytesIO, SEEK_END
+from os import close, remove
+from os.path import join as osJoin
+from tempfile import gettempdir, mkstemp
 
 from apiclient.discovery import build
+from apiclient.http import MediaFileUpload
 from fs.base import FS
-from fs.errors import FileExpected, ResourceNotFound
+from fs.errors import DirectoryExists, DirectoryExpected, FileExpected, ResourceNotFound
 from fs.info import Info
+from fs.iotools import RawWrapper
 from fs.mode import Mode
-from fs.path import dirname
+from fs.path import basename, dirname
 from fs.subfs import SubFS
 from fs.time import datetime_to_epoch, epoch_to_datetime
 from httplib2 import FileCache, Http, ServerNotFoundError
@@ -25,13 +30,61 @@ def _Escape(name):
 
 _folderMimeType = "application/vnd.google-apps.folder"
 
+# TODO - switch to MediaIoBaseUpload and use BytesIO
+class GoogleDriveFile(RawWrapper):
+	def __init__(self, fs, path, parsedMode):
+		self.fs = fs
+		self.path = path
+		self.parentMetadata = self.fs._itemFromPath(dirname(self.path))
+		self.thisMetadata = self.fs._itemFromPath(basename(self.path)) # may be None
+		# keeping a parsed mode separate from the base class's mode member
+		self.parsedMode = parsedMode
+		fileHandle, self.localPath = mkstemp(prefix="pyfilesystem-googledrive-", text=False)
+		close(fileHandle)
+
+		if (self.parsedMode.reading or self.parsedMode.appending) and not self.parsedMode.truncate:
+			if self.thisMetadata is not None:
+				initialData = self.fs.drive.files().get_media(fileId=self.thisMetadata["id"]).execute()
+				with open(self.localPath, "wb") as f:
+					f.write(initialData)
+		platformMode = self.parsedMode.to_platform()
+		platformMode += ("b" if "b" not in platformMode else "")
+		super().__init__(f=open(self.localPath, mode=platformMode))
+		if self.parsedMode.appending:
+			# seek to the end
+			self.seek(0, SEEK_END)
+
+	def close(self):
+		super().close() # close the file so that it's readable for upload
+		if self.parsedMode.writing:
+			# google doesn't accept the fractional second part
+			now = datetime.utcnow().replace(microsecond=0)
+
+			onlineMetadata = {"name": basename(self.path), "parents": [self.parentMetadata["id"]],
+				# "createdTime": now.isoformat(),
+				"modifiedTime": now.isoformat() + "Z"
+			}
+
+			upload = MediaFileUpload(self.localPath, resumable=True)
+			if self.thisMetadata is None:
+				request = self.fs.drive.files().create(body=onlineMetadata, media_body=upload)
+			else:
+				request = self.fs.drive.files().update(fileId=self.thisMetadata["id"], body={}, media_body=upload)
+
+			response = None
+			while response is None:
+				status, response = request.next_chunk()
+			# MediaFileUpload doesn't close it's file handle, so we have to workaround it
+			upload._fd.close()
+		remove(self.localPath)
+
 class GoogleDriveFS(FS):
 	def __init__(self, credentials):
 		super().__init__()
 		# do the authentication outside
 		assert credentials is not None and credentials.invalid is False, "Invalid or misssing credentials"
 
-		cache = FileCache(join(gettempdir(), ".httpcache"), safe=_SafeCacheName)
+		cache = FileCache(osJoin(gettempdir(), ".httpcache"), safe=_SafeCacheName)
 		http = Http(cache, timeout=60)
 		http = credentials.authorize(http)
 		self.drive = build("drive", "v3", http=http)
@@ -54,7 +107,11 @@ class GoogleDriveFS(FS):
 		if parentId is not None:
 			query = query +  f" and '{parentId}' in parents"
 		result = self.drive.files().list(q=query, fields="files(id,mimeType,kind,name,createdTime,modifiedTime,size)").execute()
-		assert len(result["files"]) in [0, 1]
+		if len(result["files"]) not in [0, 1]:
+			# Google drive doesn't follow the model of a filesystem, really
+			# but since most people will set it up to follow the model, we'll carry on regardless
+			# and just throw an error when it becomes a problem
+			raise RuntimeError(f"Folder with id {parentId} has more than 1 child with name {childName}")
 		if len(result["files"]) == 0:
 			return None
 		return result["files"][0]
@@ -68,9 +125,9 @@ class GoogleDriveFS(FS):
 
 	def _itemFromPath(self, path):
 		metadata = None
-		if path[0] == "/":
+		if len(path) > 0 and path[0] == "/":
 			path = path[1:]
-		if path[-1] == "/":
+		if len(path) > 0 and path[-1] == "/":
 			path = path[:-1]
 		for component in path.split("/"):
 			metadata = self._childByName(metadata["id"] if metadata is not None else None, component)
@@ -91,7 +148,7 @@ class GoogleDriveFS(FS):
 				"created": datetime_to_epoch(datetime.strptime(metadata["createdTime"], rfc3339)),
 				"metadata_changed": None, # not supported by Google Drive API
 				"modified": datetime_to_epoch(datetime.strptime(metadata["modifiedTime"], rfc3339)),
-				"size": metadata["size"],
+				"size": metadata["size"] if isFolder is False else None, # folders have no size
 				"type": 1 if isFolder else 0
 				}
 			}
@@ -112,21 +169,39 @@ class GoogleDriveFS(FS):
 
 	def makedir(self, path, permissions=None, recreate=False):
 		parentMetadata = self._itemFromPath(dirname(path))
-		if metadata is None:
+		if parentMetadata is None:
 			raise DirectoryExpected(path=path)
+		childMetadata = self._childByName(parentMetadata["id"], basename(path))
+		if childMetadata is not None:
+			if recreate is False:
+				raise DirectoryExists(path=path)
+			else:
+				return SubFS(self, path)
 		newMetadata = {"name": basename(path), "parents": [parentMetadata["id"]], "mimeType": _folderMimeType}
 		newMetadataId = self.drive.files().create(body=newMetadata, fields="id").execute()
+		return SubFS(self, path)
 
 	def openbin(self, path, mode="r", buffering=-1, **options):
-		pass
+		parsedMode = Mode(mode)
+		if parsedMode.exclusive and self.exists(path):
+			raise FileExists(path)
+		elif parsedMode.reading and not parsedMode.create and not self.exists(path):
+			raise ResourceNotFound(path)
+		elif self.isdir(path):
+			raise FileExpected(path)
+		return GoogleDriveFile(fs=self, path=path, parsedMode=parsedMode)
 
 	def remove(self, path):
 		metadata = self._itemFromPath(path)
-		self.drive.files().delete(metadata["id"])
+		if metadata is None:
+			raise FileExpected(path=path)
+		self.drive.files().delete(fileId=metadata["id"]).execute()
 
 	def removedir(self, path):
 		metadata = self._itemFromPath(path)
-		self.drive.files().delete(metadata["id"])
+		if metadata is None:
+			raise DirectoryExpected(path=path)
+		self.drive.files().delete(fileId=metadata["id"]).execute()
 
 	# non-essential method - for speeding up walk
 	def scandir(self, path):
@@ -136,9 +211,11 @@ class GoogleDriveFS(FS):
 		children = self._childrenById(metadata["id"])
 		return [_infoFromMetadata(x) for x in children]
 
+@contextmanager
 def setup_test():
 	from argparse import Namespace
 	from os import environ
+	from uuid import uuid4
 	from oauth2client import GOOGLE_AUTH_URI, GOOGLE_REVOKE_URI, GOOGLE_TOKEN_URI
 	from oauth2client.client import OAuth2WebServerFlow
 	from oauth2client.file import Storage
@@ -156,11 +233,67 @@ def setup_test():
 		flags.noauth_local_webserver = True
 		credentials = run_flow(flow, storage, flags)
 	fs = GoogleDriveFS(credentials)
-	testDir = "/tests/temp"
-	return fs, testDir
+	testDir = "/tests/googledrivefs-test-" + uuid4().hex
+	try:
+		assert fs.exists(testDir) is False
+		fs.makedir(testDir)
+		yield (fs, testDir)
+	finally:
+		fs.removedir(testDir)
+		fs.close()
 
-def test_getinfo():
-	fs, testDir = setup_test()
-	info_ = fs.getinfo(testDir + "/test.txt")
+def test_directory_creation_and_destruction():
+	with setup_test() as testSetup:
+		fs, testDir = testSetup
 
-	fs.remove(testDir + "/test.txt")
+		newDir = testDir + "/testdir"
+		assert not fs.exists(newDir), "Bad initial state"
+		assert not fs.isdir(newDir), "Bad initial state"
+		
+		fs.makedir(newDir, recreate=False)
+		assert fs.exists(newDir)
+		assert fs.isdir(newDir)
+		
+		try:
+			fs.makedir(newDir, recreate=False)
+			assert False, "Directory creation should have failed"
+		except DirectoryExists:
+			pass
+		assert fs.exists(newDir)
+		assert fs.isdir(newDir)
+
+		fs.makedir(newDir, recreate=True)
+		assert fs.exists(newDir)
+		assert fs.isdir(newDir)
+		
+		fs.removedir(newDir)
+		assert not fs.exists(newDir)
+		assert not fs.isdir(newDir)
+
+def assert_contents(fs, path, expectedContents):
+	with fs.open(path, "r") as f:
+		contents = f.read()
+		assert contents == expectedContents, f"'{contents}'"
+
+def test_open_modes():
+	from contextlib import suppress
+	from fs.path import join as fsJoin
+
+	with setup_test() as testSetup:
+		fs, testDir = testSetup
+
+		path = fsJoin(testDir, "test.txt")
+		with suppress(ResourceNotFound, FileExpected):
+			fs.remove(path)
+		with fs.open(path, "w") as f:
+			f.write("AAA")
+		assert_contents(fs, path, "AAA")
+		with fs.open(path, "a") as f:
+			f.write("BBB")
+		assert_contents(fs, path, "AAABBB")
+		with fs.open(path, "r+") as f:
+			f.seek(1)
+			f.write("X")
+		assert_contents(fs, path, "AXABBB")
+		fs.remove(path)
+		assert not fs.exists(path)
