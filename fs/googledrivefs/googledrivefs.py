@@ -58,15 +58,12 @@ class GoogleDriveFile(RawWrapper):
 		super().close() # close the file so that it's readable for upload
 		if self.parsedMode.writing:
 			# google doesn't accept the fractional second part
-			now = datetime.utcnow().replace(microsecond=0)
-
-			onlineMetadata = {"name": basename(self.path), "parents": [self.parentMetadata["id"]],
-				# "createdTime": now.isoformat(),
-				"modifiedTime": now.isoformat() + "Z"
-			}
+			now = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+			onlineMetadata = {"modifiedTime": now}
 
 			upload = MediaFileUpload(self.localPath, resumable=True)
 			if self.thisMetadata is None:
+				onlineMetadata.update({"name": basename(self.path), "parents": [self.parentMetadata["id"]], "createdTime": now})
 				request = self.fs.drive.files().create(body=onlineMetadata, media_body=upload)
 			else:
 				request = self.fs.drive.files().update(fileId=self.thisMetadata["id"], body={}, media_body=upload)
@@ -269,6 +266,22 @@ def test_directory_creation_and_destruction():
 		fs.removedir(newDir)
 		assert not fs.exists(newDir)
 		assert not fs.isdir(newDir)
+
+def test_update_times():
+	with setup_test() as testSetup:
+		fs, testDir = testSetup
+
+		path = testDir + "/test.txt"
+		with fs.open(path, "w") as f:
+			f.write("AAA")
+		info1 = fs.getinfo(path)
+
+		with fs.open(path, "a") as f:
+			f.write("BBB")
+		info2 = fs.getinfo(path)
+
+		assert info2.created == info1.created, "Creation date should be the same"
+		assert info2.modified > info1.modified, "Modified date should have increased"
 
 def assert_contents(fs, path, expectedContents):
 	with fs.open(path, "r") as f:
