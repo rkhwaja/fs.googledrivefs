@@ -87,17 +87,17 @@ class GoogleDriveFS(FS):
 		self.drive = build("drive", "v3", http=http)
 
 		_meta = self._meta = {
-			"case_insensitive": False, # I think?
+			"case_insensitive": False, # it will even let you have 2 identical filenames in the same directory!
 			"invalid_path_chars": ":", # not sure what else
 			"max_path_length": None, # don't know what the limit is
 			"max_sys_path_length": None, # there's no syspath
 			"network": True,
-			"read_only": True, # at least until openbin is fully implemented
+			"read_only": False,
 			"supports_rename": False # since we don't have a syspath...
 		}
 
 	def __repr__(self):
-		return f"<GoogleDriveFS>"
+		return "<GoogleDriveFS>"
 
 	def _childByName(self, parentId, childName):
 		query = f"trashed=False and name='{_Escape(childName)}'"
@@ -217,13 +217,13 @@ def setup_test():
 	from oauth2client.client import OAuth2WebServerFlow
 	from oauth2client.file import Storage
 	from oauth2client.tools import run_flow
-	clientId = environ["GOOGLE_DRIVE_CLIENT_ID"]
-	clientSecret = environ["GOOGLE_DRIVE_CLIENT_SECRET"]
-	credentialsPath = environ["GOOGLE_DRIVE_CREDENTIALS_PATH"]
-	scope = "https://www.googleapis.com/auth/drive"
 	storage = Storage(credentialsPath)
 	credentials = storage.get()
 	if credentials is None or credentials.invalid is True:
+		clientId = environ["GOOGLE_DRIVE_CLIENT_ID"]
+		clientSecret = environ["GOOGLE_DRIVE_CLIENT_SECRET"]
+		credentialsPath = environ["GOOGLE_DRIVE_CREDENTIALS_PATH"]
+		scope = "https://www.googleapis.com/auth/drive"
 		flow = OAuth2WebServerFlow(clientId, clientSecret, scope=scope, auth_uri=GOOGLE_AUTH_URI, token_uri=GOOGLE_TOKEN_URI, revoke_uri=GOOGLE_REVOKE_URI)
 		flags = Namespace()
 		flags.logging_level = "INFO"
