@@ -17,7 +17,7 @@ from fs.errors import DirectoryExists, DirectoryExpected, FileExpected, Resource
 from fs.info import Info
 from fs.iotools import RawWrapper
 from fs.mode import Mode
-from fs.path import basename, dirname
+from fs.path import basename, dirname, iteratepath
 from fs.subfs import SubFS
 from fs.time import datetime_to_epoch, epoch_to_datetime
 from httplib2 import FileCache, Http, ServerNotFoundError
@@ -33,6 +33,12 @@ def _Escape(name):
 	return name
 
 _folderMimeType = "application/vnd.google-apps.folder"
+_INVALID_PATH_CHARS = ":"
+
+def _CheckPath(path):
+	for char in _INVALID_PATH_CHARS:
+		if char in path:
+			raise InvalidCharsInPath(path)
 
 # TODO - switch to MediaIoBaseUpload and use BytesIO
 class GoogleDriveFile(RawWrapper):
@@ -99,8 +105,8 @@ class GoogleDriveFS(FS):
 		self.drive = build("drive", "v3", http=http)
 
 		_meta = self._meta = {
-			"case_insensitive": False, # it will even let you have 2 identical filenames in the same directory!
-			"invalid_path_chars": ":", # not sure what else
+			"case_insensitive": True, # it will even let you have 2 identical filenames in the same directory! But the search is case-insensitive
+			"invalid_path_chars": _INVALID_PATH_CHARS, # not sure what else
 			"max_path_length": None, # don't know what the limit is
 			"max_sys_path_length": None, # there's no syspath
 			"network": True,
@@ -116,6 +122,7 @@ class GoogleDriveFS(FS):
 		if parentId is not None:
 			query = query +  f" and '{parentId}' in parents"
 		result = self.drive.files().list(q=query, fields="files(id,mimeType,kind,name,createdTime,modifiedTime,size)").execute()
+		debug(f"_childByName: {result['files']}")
 		if len(result["files"]) not in [0, 1]:
 			# Google drive doesn't follow the model of a filesystem, really
 			# but since most people will set it up to follow the model, we'll carry on regardless
@@ -124,6 +131,8 @@ class GoogleDriveFS(FS):
 		if len(result["files"]) == 0:
 			# debug(f"_childByName: Not found: {parentId}, {childName}")
 			return None
+		# if result["files"][0]["name"] != childName:
+		# 	return None
 		# debug(f"_childByName: Found: {result['files'][0]}")
 		return result["files"][0]
 
@@ -135,13 +144,8 @@ class GoogleDriveFS(FS):
 		return result["files"]
 
 	def _itemFromPath(self, path):
-		# debug(f"_itemFromPath: {path}")
-		if len(path) > 0 and path[0] == "/":
-			path = path[1:]
-		if len(path) > 0 and path[-1] == "/":
-			path = path[:-1]
 		metadata = None
-		for component in path.split("/"):
+		for component in iteratepath(path):
 			debug(f"component: {component}: {metadata is not None}")
 			metadata = self._childByName(metadata["id"] if metadata is not None else None, component)
 			if metadata is None:
@@ -162,7 +166,7 @@ class GoogleDriveFS(FS):
 				"created": datetime_to_epoch(datetime.strptime(metadata["createdTime"], rfc3339)),
 				"metadata_changed": None, # not supported by Google Drive API
 				"modified": datetime_to_epoch(datetime.strptime(metadata["modifiedTime"], rfc3339)),
-				"size": metadata["size"] if isFolder is False else None, # folders have no size
+				"size": int(metadata["size"]) if isFolder is False else None, # folders have no size
 				"type": 1 if isFolder else 0
 				}
 			}
@@ -206,6 +210,11 @@ class GoogleDriveFS(FS):
 			raise ResourceNotFound(path)
 		elif self.isdir(path):
 			raise FileExpected(path)
+		if parsedMode.writing:
+			# make sure that the parent directory exists
+			parentDir = dirname(path)
+			if self._itemFromPath(parentDir)is None:
+				raise ResourceNotFound(parentDir)
 		return GoogleDriveFile(fs=self, path=path, parsedMode=parsedMode)
 
 	def remove(self, path):
@@ -229,7 +238,7 @@ class GoogleDriveFS(FS):
 		if metadata is None:
 			raise ResourceNotFound(path=path)
 		children = self._childrenById(metadata["id"])
-		return [_infoFromMetadata(x) for x in children]
+		return [self._infoFromMetadata(x) for x in children]
 
 @contextmanager
 def setup_test():
