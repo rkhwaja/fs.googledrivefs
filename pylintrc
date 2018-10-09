@@ -1,0 +1,7 @@
+[FORMAT]
+indent-string=\t
+max-line-length=200
+
+[MESSAGES CONTROL]
+# no-member causes false positives with objects constructed via google's discovery protocol
+disable=bad-continuation, fixme, invalid-name, len-as-condition, missing-docstring, no-member

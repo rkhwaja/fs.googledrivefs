@@ -1,14 +1,18 @@
+from __future__ import absolute_import
+
 from contextlib import contextmanager
 from datetime import datetime
 from hashlib import md5
 from io import BytesIO, SEEK_END
+from logging import debug, info
 from os import close, remove
 from os.path import join as osJoin
 from tempfile import gettempdir, mkstemp
 
 from apiclient.discovery import build
 from apiclient.http import MediaFileUpload
-from fs.base import FS
+from ..base import FS
+# from fs.base import FS
 from fs.errors import DirectoryExists, DirectoryExpected, FileExpected, ResourceNotFound
 from fs.info import Info
 from fs.iotools import RawWrapper
@@ -41,10 +45,12 @@ class GoogleDriveFile(RawWrapper):
 		self.parsedMode = parsedMode
 		fileHandle, self.localPath = mkstemp(prefix="pyfilesystem-googledrive-", text=False)
 		close(fileHandle)
+		# debug(f"self.localPath: {self.localPath}")
 
 		if (self.parsedMode.reading or self.parsedMode.appending) and not self.parsedMode.truncate:
 			if self.thisMetadata is not None:
 				initialData = self.fs.drive.files().get_media(fileId=self.thisMetadata["id"]).execute()
+				debug(f"Read initial data: {initialData}")
 				with open(self.localPath, "wb") as f:
 					f.write(initialData)
 		platformMode = self.parsedMode.to_platform()
@@ -53,6 +59,7 @@ class GoogleDriveFile(RawWrapper):
 		if self.parsedMode.appending:
 			# seek to the end
 			self.seek(0, SEEK_END)
+			debug("Seeked to end")
 
 	def close(self):
 		super().close() # close the file so that it's readable for upload
@@ -61,11 +68,16 @@ class GoogleDriveFile(RawWrapper):
 			now = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 			onlineMetadata = {"modifiedTime": now}
 
+			with open(self.localPath, "rb") as f:
+				debug(f"About to upload data: {f.read()}")
+
 			upload = MediaFileUpload(self.localPath, resumable=True)
 			if self.thisMetadata is None:
+				debug("Creating new file")
 				onlineMetadata.update({"name": basename(self.path), "parents": [self.parentMetadata["id"]], "createdTime": now})
 				request = self.fs.drive.files().create(body=onlineMetadata, media_body=upload)
 			else:
+				debug("Updating existing file")
 				request = self.fs.drive.files().update(fileId=self.thisMetadata["id"], body={}, media_body=upload)
 
 			response = None
@@ -110,7 +122,9 @@ class GoogleDriveFS(FS):
 			# and just throw an error when it becomes a problem
 			raise RuntimeError(f"Folder with id {parentId} has more than 1 child with name {childName}")
 		if len(result["files"]) == 0:
+			# debug(f"_childByName: Not found: {parentId}, {childName}")
 			return None
+		# debug(f"_childByName: Found: {result['files'][0]}")
 		return result["files"][0]
 
 	def _childrenById(self, parentId):
@@ -118,18 +132,21 @@ class GoogleDriveFS(FS):
 		if parentId is not None:
 			query = query +  f" and '{parentId}' in parents"
 		result = self.drive.files().list(q=query, fields="files(id,mimeType,kind,name,createdTime,modifiedTime,size)").execute()
-		return results["files"]
+		return result["files"]
 
 	def _itemFromPath(self, path):
-		metadata = None
+		# debug(f"_itemFromPath: {path}")
 		if len(path) > 0 and path[0] == "/":
 			path = path[1:]
 		if len(path) > 0 and path[-1] == "/":
 			path = path[:-1]
+		metadata = None
 		for component in path.split("/"):
+			debug(f"component: {component}: {metadata is not None}")
 			metadata = self._childByName(metadata["id"] if metadata is not None else None, component)
 			if metadata is None:
 				return None
+		debug(f"_itemFromPath: {path}: {metadata}")
 		return metadata
 
 	def _infoFromMetadata(self, metadata): # pylint: disable=no-self-use
@@ -165,6 +182,7 @@ class GoogleDriveFS(FS):
 		return [x.name for x in self.scandir(path)]
 
 	def makedir(self, path, permissions=None, recreate=False):
+		info(f"makedir: {path}, {permissions}, {recreate}")
 		parentMetadata = self._itemFromPath(dirname(path))
 		if parentMetadata is None:
 			raise DirectoryExpected(path=path)
@@ -179,29 +197,34 @@ class GoogleDriveFS(FS):
 		return SubFS(self, path)
 
 	def openbin(self, path, mode="r", buffering=-1, **options):
+		info(f"openbin: {path}, {mode}, {buffering}")
 		parsedMode = Mode(mode)
-		if parsedMode.exclusive and self.exists(path):
+		exists = self.exists(path)
+		if parsedMode.exclusive and exists:
 			raise FileExists(path)
-		elif parsedMode.reading and not parsedMode.create and not self.exists(path):
+		elif parsedMode.reading and not parsedMode.create and not exists:
 			raise ResourceNotFound(path)
 		elif self.isdir(path):
 			raise FileExpected(path)
 		return GoogleDriveFile(fs=self, path=path, parsedMode=parsedMode)
 
 	def remove(self, path):
+		info(f"remove: {path}")
 		metadata = self._itemFromPath(path)
 		if metadata is None:
 			raise FileExpected(path=path)
 		self.drive.files().delete(fileId=metadata["id"]).execute()
 
 	def removedir(self, path):
+		info(f"removedir: {path}")
 		metadata = self._itemFromPath(path)
 		if metadata is None:
 			raise DirectoryExpected(path=path)
 		self.drive.files().delete(fileId=metadata["id"]).execute()
 
 	# non-essential method - for speeding up walk
-	def scandir(self, path):
+	def scandir(self, path, namespaces=None, page=None):
+		info(f"remove: {path}, {namespaces}, {page}")
 		metadata = self._itemFromPath(path)
 		if metadata is None:
 			raise ResourceNotFound(path=path)
