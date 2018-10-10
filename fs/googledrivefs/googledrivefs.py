@@ -13,7 +13,7 @@ from apiclient.discovery import build
 from apiclient.http import MediaFileUpload
 from ..base import FS
 # from fs.base import FS
-from fs.errors import DirectoryExists, DirectoryExpected, FileExpected, ResourceNotFound
+from fs.errors import DirectoryExists, DirectoryExpected, FileExists, FileExpected, ResourceNotFound
 from fs.info import Info
 from fs.iotools import RawWrapper
 from fs.mode import Mode
@@ -46,12 +46,12 @@ class GoogleDriveFile(RawWrapper):
 		self.fs = fs
 		self.path = path
 		self.parentMetadata = self.fs._itemFromPath(dirname(self.path))
-		self.thisMetadata = self.fs._itemFromPath(basename(self.path)) # may be None
+		self.thisMetadata = self.fs._itemFromPath(self.path) # may be None
 		# keeping a parsed mode separate from the base class's mode member
 		self.parsedMode = parsedMode
 		fileHandle, self.localPath = mkstemp(prefix="pyfilesystem-googledrive-", text=False)
 		close(fileHandle)
-		# debug(f"self.localPath: {self.localPath}")
+		debug(f"self.localPath: {self.localPath}")
 
 		if (self.parsedMode.reading or self.parsedMode.appending) and not self.parsedMode.truncate:
 			if self.thisMetadata is not None:
@@ -61,6 +61,7 @@ class GoogleDriveFile(RawWrapper):
 					f.write(initialData)
 		platformMode = self.parsedMode.to_platform()
 		platformMode += ("b" if "b" not in platformMode else "")
+		platformMode = platformMode.replace("x", "a")
 		super().__init__(f=open(self.localPath, mode=platformMode))
 		if self.parsedMode.appending:
 			# seek to the end
@@ -75,7 +76,8 @@ class GoogleDriveFile(RawWrapper):
 			onlineMetadata = {"modifiedTime": now}
 
 			with open(self.localPath, "rb") as f:
-				debug(f"About to upload data: {f.read()}")
+				dataToWrite = f.read()
+			debug(f"About to upload data: {dataToWrite}")
 
 			upload = MediaFileUpload(self.localPath, resumable=True)
 			if self.thisMetadata is None:
@@ -86,9 +88,10 @@ class GoogleDriveFile(RawWrapper):
 				debug("Updating existing file")
 				request = self.fs.drive.files().update(fileId=self.thisMetadata["id"], body={}, media_body=upload)
 
-			response = None
-			while response is None:
-				status, response = request.next_chunk()
+			if len(dataToWrite) > 0:
+				response = None
+				while response is None:
+					status, response = request.next_chunk()
 			# MediaFileUpload doesn't close it's file handle, so we have to workaround it
 			upload._fd.close()
 		remove(self.localPath)
@@ -146,11 +149,11 @@ class GoogleDriveFS(FS):
 	def _itemFromPath(self, path):
 		metadata = None
 		for component in iteratepath(path):
-			debug(f"component: {component}: {metadata is not None}")
+			# debug(f"component: {component}: {metadata is not None}")
 			metadata = self._childByName(metadata["id"] if metadata is not None else None, component)
 			if metadata is None:
 				return None
-		debug(f"_itemFromPath: {path}: {metadata}")
+		debug(f"_itemFromPath returns {path}: {metadata}")
 		return metadata
 
 	def _infoFromMetadata(self, metadata): # pylint: disable=no-self-use
