@@ -6,7 +6,7 @@ from hashlib import md5
 from io import BytesIO, SEEK_END
 from logging import debug, info
 from os import close, remove
-from os.path import join as osJoin
+from os.path import join as osJoin, splitext
 from tempfile import gettempdir, mkstemp
 
 from apiclient.discovery import build
@@ -32,6 +32,7 @@ def _Escape(name):
 	name = name.replace("'", r"\'")
 	return name
 
+_fileMimeType = "application/vnd.google-apps.file"
 _folderMimeType = "application/vnd.google-apps.folder"
 _INVALID_PATH_CHARS = ":"
 
@@ -41,7 +42,7 @@ def _CheckPath(path):
 			raise InvalidCharsInPath(path)
 
 # TODO - switch to MediaIoBaseUpload and use BytesIO
-class GoogleDriveFile(RawWrapper):
+class _UploadOnClose(RawWrapper):
 	def __init__(self, fs, path, parsedMode):
 		self.fs = fs
 		self.path = path
@@ -49,7 +50,7 @@ class GoogleDriveFile(RawWrapper):
 		self.thisMetadata = self.fs._itemFromPath(self.path) # may be None
 		# keeping a parsed mode separate from the base class's mode member
 		self.parsedMode = parsedMode
-		fileHandle, self.localPath = mkstemp(prefix="pyfilesystem-googledrive-", text=False)
+		fileHandle, self.localPath = mkstemp(prefix="pyfilesystem-googledrive-", suffix=splitext(self.path)[1], text=False)
 		close(fileHandle)
 		debug(f"self.localPath: {self.localPath}")
 
@@ -79,21 +80,30 @@ class GoogleDriveFile(RawWrapper):
 				dataToWrite = f.read()
 			debug(f"About to upload data: {dataToWrite}")
 
-			upload = MediaFileUpload(self.localPath, resumable=True)
-			if self.thisMetadata is None:
-				debug("Creating new file")
-				onlineMetadata.update({"name": basename(self.path), "parents": [self.parentMetadata["id"]], "createdTime": now})
-				request = self.fs.drive.files().create(body=onlineMetadata, media_body=upload)
-			else:
-				debug("Updating existing file")
-				request = self.fs.drive.files().update(fileId=self.thisMetadata["id"], body={}, media_body=upload)
-
 			if len(dataToWrite) > 0:
+				upload = MediaFileUpload(self.localPath, resumable=True)
+				if self.thisMetadata is None:
+					debug("Creating new file")
+					onlineMetadata.update({"name": basename(self.path), "parents": [self.parentMetadata["id"]], "createdTime": now})
+					request = self.fs.drive.files().create(body=onlineMetadata, media_body=upload)
+				else:
+					debug("Updating existing file")
+					request = self.fs.drive.files().update(fileId=self.thisMetadata["id"], body={}, media_body=upload)
+
 				response = None
 				while response is None:
 					status, response = request.next_chunk()
-			# MediaFileUpload doesn't close it's file handle, so we have to workaround it
-			upload._fd.close()
+					debug(f"{status}: {response}")
+				# MediaFileUpload doesn't close it's file handle, so we have to workaround it
+				upload._fd.close()
+			else:
+				onlineMetadata.update({"mime_type": _fileMimeType})
+				onlineMetadata.update({"name": basename(self.path), "parents": [self.parentMetadata["id"]], "createdTime": now})
+				createdFile = self.fs.drive.files().create(
+					body=onlineMetadata,
+					media_body=self.localPath,
+					media_mime_type=_fileMimeType).execute()
+				debug(f"Created file: {createdFile}")
 		remove(self.localPath)
 
 class GoogleDriveFS(FS):
@@ -121,6 +131,7 @@ class GoogleDriveFS(FS):
 		return "<GoogleDriveFS>"
 
 	def _childByName(self, parentId, childName):
+		# this "name=" clause seems to be case-insensitive, which means it's easier to model this as a case-insensitive filesystem
 		query = f"trashed=False and name='{_Escape(childName)}'"
 		if parentId is not None:
 			query = query +  f" and '{parentId}' in parents"
@@ -177,71 +188,78 @@ class GoogleDriveFS(FS):
 		return Info(rawInfo)
 
 	def getinfo(self, path, namespaces=None):
-		metadata = self._itemFromPath(path)
-		if metadata is None:
-			raise ResourceNotFound(path=path)
-		return self._infoFromMetadata(metadata)
+		with self._lock:
+			metadata = self._itemFromPath(path)
+			if metadata is None:
+				raise ResourceNotFound(path=path)
+			return self._infoFromMetadata(metadata)
 
 	def setinfo(self, path, info): # pylint: disable=too-many-branches
 		pass
 
 	def listdir(self, path):
-		return [x.name for x in self.scandir(path)]
+		with self._lock:
+			return [x.name for x in self.scandir(path)]
 
 	def makedir(self, path, permissions=None, recreate=False):
-		info(f"makedir: {path}, {permissions}, {recreate}")
-		parentMetadata = self._itemFromPath(dirname(path))
-		if parentMetadata is None:
-			raise DirectoryExpected(path=path)
-		childMetadata = self._childByName(parentMetadata["id"], basename(path))
-		if childMetadata is not None:
-			if recreate is False:
-				raise DirectoryExists(path=path)
-			else:
-				return SubFS(self, path)
-		newMetadata = {"name": basename(path), "parents": [parentMetadata["id"]], "mimeType": _folderMimeType}
-		newMetadataId = self.drive.files().create(body=newMetadata, fields="id").execute()
-		return SubFS(self, path)
+		with self._lock:
+			info(f"makedir: {path}, {permissions}, {recreate}")
+			parentMetadata = self._itemFromPath(dirname(path))
+			if parentMetadata is None:
+				raise DirectoryExpected(path=path)
+			childMetadata = self._childByName(parentMetadata["id"], basename(path))
+			if childMetadata is not None:
+				if recreate is False:
+					raise DirectoryExists(path=path)
+				else:
+					return SubFS(self, path)
+			newMetadata = {"name": basename(path), "parents": [parentMetadata["id"]], "mimeType": _folderMimeType}
+			newMetadataId = self.drive.files().create(body=newMetadata, fields="id").execute()
+			return SubFS(self, path)
 
 	def openbin(self, path, mode="r", buffering=-1, **options):
-		info(f"openbin: {path}, {mode}, {buffering}")
-		parsedMode = Mode(mode)
-		exists = self.exists(path)
-		if parsedMode.exclusive and exists:
-			raise FileExists(path)
-		elif parsedMode.reading and not parsedMode.create and not exists:
-			raise ResourceNotFound(path)
-		elif self.isdir(path):
-			raise FileExpected(path)
-		if parsedMode.writing:
-			# make sure that the parent directory exists
-			parentDir = dirname(path)
-			if self._itemFromPath(parentDir)is None:
-				raise ResourceNotFound(parentDir)
-		return GoogleDriveFile(fs=self, path=path, parsedMode=parsedMode)
+		with self._lock:
+			info(f"openbin: {path}, {mode}, {buffering}")
+			parsedMode = Mode(mode)
+			exists = self.exists(path)
+			if parsedMode.exclusive and exists:
+				raise FileExists(path)
+			elif parsedMode.reading and not parsedMode.create and not exists:
+				raise ResourceNotFound(path)
+			elif self.isdir(path):
+				raise FileExpected(path)
+			if parsedMode.writing:
+				# make sure that the parent directory exists
+				parentDir = dirname(path)
+				if self._itemFromPath(parentDir)is None:
+					raise ResourceNotFound(parentDir)
+			return _UploadOnClose(fs=self, path=path, parsedMode=parsedMode)
 
 	def remove(self, path):
-		info(f"remove: {path}")
-		metadata = self._itemFromPath(path)
-		if metadata is None:
-			raise FileExpected(path=path)
-		self.drive.files().delete(fileId=metadata["id"]).execute()
+		with self._lock:
+			info(f"remove: {path}")
+			metadata = self._itemFromPath(path)
+			if metadata is None:
+				raise FileExpected(path=path)
+			self.drive.files().delete(fileId=metadata["id"]).execute()
 
 	def removedir(self, path):
-		info(f"removedir: {path}")
-		metadata = self._itemFromPath(path)
-		if metadata is None:
-			raise DirectoryExpected(path=path)
-		self.drive.files().delete(fileId=metadata["id"]).execute()
+		with self._lock:
+			info(f"removedir: {path}")
+			metadata = self._itemFromPath(path)
+			if metadata is None:
+				raise DirectoryExpected(path=path)
+			self.drive.files().delete(fileId=metadata["id"]).execute()
 
 	# non-essential method - for speeding up walk
 	def scandir(self, path, namespaces=None, page=None):
-		info(f"remove: {path}, {namespaces}, {page}")
-		metadata = self._itemFromPath(path)
-		if metadata is None:
-			raise ResourceNotFound(path=path)
-		children = self._childrenById(metadata["id"])
-		return [self._infoFromMetadata(x) for x in children]
+		with self._lock:
+			info(f"remove: {path}, {namespaces}, {page}")
+			metadata = self._itemFromPath(path)
+			if metadata is None:
+				raise ResourceNotFound(path=path)
+			children = self._childrenById(metadata["id"])
+			return [self._infoFromMetadata(x) for x in children]
 
 @contextmanager
 def setup_test():
