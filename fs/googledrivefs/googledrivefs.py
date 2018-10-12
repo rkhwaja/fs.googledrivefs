@@ -14,7 +14,7 @@ from apiclient.http import MediaFileUpload
 from ..base import FS
 # from fs.base import FS
 from fs.enums import ResourceType
-from fs.errors import DirectoryExists, DirectoryExpected, FileExists, FileExpected, InvalidCharsInPath, ResourceNotFound
+from fs.errors import DirectoryExists, DirectoryExpected, DirectoryNotEmpty, FileExists, FileExpected, InvalidCharsInPath, ResourceNotFound
 from fs.info import Info
 from fs.iotools import RawWrapper
 from fs.mode import Mode
@@ -210,7 +210,7 @@ class GoogleDriveFS(FS):
 			info(f"makedir: {path}, {permissions}, {recreate}")
 			parentMetadata = self._itemFromPath(dirname(path))
 			if parentMetadata is None:
-				raise DirectoryExpected(path=path)
+				raise ResourceNotFound(path=path)
 			childMetadata = self._childByName(parentMetadata["id"], basename(path))
 			if childMetadata is not None:
 				if recreate is False:
@@ -246,6 +246,8 @@ class GoogleDriveFS(FS):
 			info(f"remove: {path}")
 			metadata = self._itemFromPath(path)
 			if metadata is None:
+				raise ResourceNotFound(path=path)
+			if metadata["mimeType"] == _folderMimeType:
 				raise FileExpected(path=path)
 			self.drive.files().delete(fileId=metadata["id"]).execute()
 
@@ -255,7 +257,12 @@ class GoogleDriveFS(FS):
 			info(f"removedir: {path}")
 			metadata = self._itemFromPath(path)
 			if metadata is None:
+				raise ResourceNotFound(path=path)
+			if metadata["mimeType"] != _folderMimeType:
 				raise DirectoryExpected(path=path)
+			children = self._childrenById(metadata["id"])
+			if len(children) > 0:
+				raise DirectoryNotEmpty(path=path)
 			self.drive.files().delete(fileId=metadata["id"]).execute()
 
 	# non-essential method - for speeding up walk
