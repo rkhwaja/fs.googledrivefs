@@ -279,7 +279,9 @@ class GoogleDriveFS(FS):
 			if metadata["mimeType"] != _folderMimeType:
 				raise DirectoryExpected(path=path)
 			children = self._childrenById(metadata["id"])
-			return [self._infoFromMetadata(x) for x in children]
+			if page is not None:
+				return (self._infoFromMetadata(x) for x in children[page[0]:page[1]])
+			return (self._infoFromMetadata(x) for x in children)
 
 @contextmanager
 def setup_test():
