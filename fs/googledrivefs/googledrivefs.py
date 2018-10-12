@@ -10,7 +10,7 @@ from os.path import join as osJoin, splitext
 from tempfile import gettempdir, mkstemp
 
 from apiclient.discovery import build
-from apiclient.http import MediaFileUpload
+from apiclient.http import MediaFileUpload, MediaIoBaseUpload
 from ..base import FS
 # from fs.base import FS
 from fs.enums import ResourceType
@@ -68,7 +68,6 @@ class _UploadOnClose(RawWrapper):
 		if self.parsedMode.appending:
 			# seek to the end
 			self.seek(0, SEEK_END)
-			debug("Seeked to end")
 
 	def close(self):
 		super().close() # close the file so that it's readable for upload
@@ -98,13 +97,20 @@ class _UploadOnClose(RawWrapper):
 				# MediaFileUpload doesn't close it's file handle, so we have to workaround it
 				upload._fd.close()
 			else:
-				onlineMetadata.update({"mime_type": _fileMimeType})
-				onlineMetadata.update({"name": basename(self.path), "parents": [self.parentMetadata["id"]], "createdTime": now})
-				createdFile = self.fs.drive.files().create(
-					body=onlineMetadata,
-					media_body=self.localPath,
-					media_mime_type=_fileMimeType).execute()
-				debug(f"Created file: {createdFile}")
+				fh = BytesIO(b"")
+				media = MediaIoBaseUpload(fh, mimetype="application/octet-stream", chunksize=-1, resumable=False)
+				if self.thisMetadata is None:
+					onlineMetadata.update({"name": basename(self.path), "parents": [self.parentMetadata["id"]], "createdTime": now})
+					createdFile = self.fs.drive.files().create(
+						body=onlineMetadata,
+						media_body=media).execute()
+					debug(f"Created empty file: {createdFile}")
+				else:
+					updatedFile = self.fs.drive.files().update(
+						fileId=self.thisMetadata["id"],
+						body={},
+						media_body=media).execute()
+					debug(f"Updated file to empty: {updatedFile}")
 		remove(self.localPath)
 
 class GoogleDriveFS(FS):
@@ -137,18 +143,13 @@ class GoogleDriveFS(FS):
 		if parentId is not None:
 			query = query +  f" and '{parentId}' in parents"
 		result = self.drive.files().list(q=query, fields="files(id,mimeType,kind,name,createdTime,modifiedTime,size)").execute()
-		debug(f"_childByName: {result['files']}")
 		if len(result["files"]) not in [0, 1]:
 			# Google drive doesn't follow the model of a filesystem, really
 			# but since most people will set it up to follow the model, we'll carry on regardless
 			# and just throw an error when it becomes a problem
 			raise RuntimeError(f"Folder with id {parentId} has more than 1 child with name {childName}")
 		if len(result["files"]) == 0:
-			# debug(f"_childByName: Not found: {parentId}, {childName}")
 			return None
-		# if result["files"][0]["name"] != childName:
-		# 	return None
-		# debug(f"_childByName: Found: {result['files'][0]}")
 		return result["files"][0]
 
 	def _childrenById(self, parentId):
@@ -161,11 +162,9 @@ class GoogleDriveFS(FS):
 	def _itemFromPath(self, path):
 		metadata = None
 		for component in iteratepath(path):
-			# debug(f"component: {component}: {metadata is not None}")
 			metadata = self._childByName(metadata["id"] if metadata is not None else None, component)
 			if metadata is None:
 				return None
-		debug(f"_itemFromPath returns {path}: {metadata}")
 		return metadata
 
 	def _infoFromMetadata(self, metadata): # pylint: disable=no-self-use
@@ -198,6 +197,10 @@ class GoogleDriveFS(FS):
 
 	def setinfo(self, path, info): # pylint: disable=too-many-branches
 		_CheckPath(path)
+		with self._lock:
+			metadata = self._itemFromPath(path)
+			if metadata is None:
+				raise ResourceNotFound(path=path)
 
 	def listdir(self, path):
 		_CheckPath(path)
@@ -269,10 +272,12 @@ class GoogleDriveFS(FS):
 	def scandir(self, path, namespaces=None, page=None):
 		_CheckPath(path)
 		with self._lock:
-			info(f"remove: {path}, {namespaces}, {page}")
+			info(f"scandir: {path}, {namespaces}, {page}")
 			metadata = self._itemFromPath(path)
 			if metadata is None:
 				raise ResourceNotFound(path=path)
+			if metadata["mimeType"] != _folderMimeType:
+				raise DirectoryExpected(path=path)
 			children = self._childrenById(metadata["id"])
 			return [self._infoFromMetadata(x) for x in children]
 
