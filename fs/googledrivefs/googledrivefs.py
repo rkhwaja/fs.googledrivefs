@@ -13,7 +13,8 @@ from apiclient.discovery import build
 from apiclient.http import MediaFileUpload
 from ..base import FS
 # from fs.base import FS
-from fs.errors import DirectoryExists, DirectoryExpected, FileExists, FileExpected, ResourceNotFound
+from fs.enums import ResourceType
+from fs.errors import DirectoryExists, DirectoryExpected, FileExists, FileExpected, InvalidCharsInPath, ResourceNotFound
 from fs.info import Info
 from fs.iotools import RawWrapper
 from fs.mode import Mode
@@ -34,7 +35,7 @@ def _Escape(name):
 
 _fileMimeType = "application/vnd.google-apps.file"
 _folderMimeType = "application/vnd.google-apps.folder"
-_INVALID_PATH_CHARS = ":"
+_INVALID_PATH_CHARS = ":\0"
 
 def _CheckPath(path):
 	for char in _INVALID_PATH_CHARS:
@@ -181,13 +182,14 @@ class GoogleDriveFS(FS):
 				"metadata_changed": None, # not supported by Google Drive API
 				"modified": datetime_to_epoch(datetime.strptime(metadata["modifiedTime"], rfc3339)),
 				"size": int(metadata["size"]) if isFolder is False else None, # folders have no size
-				"type": 1 if isFolder else 0
+				"type": ResourceType.directory if isFolder else ResourceType.file
 				}
 			}
 		# there is also file-type-specific metadata like imageMediaMetadata
 		return Info(rawInfo)
 
 	def getinfo(self, path, namespaces=None):
+		_CheckPath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
 			if metadata is None:
@@ -195,13 +197,15 @@ class GoogleDriveFS(FS):
 			return self._infoFromMetadata(metadata)
 
 	def setinfo(self, path, info): # pylint: disable=too-many-branches
-		pass
+		_CheckPath(path)
 
 	def listdir(self, path):
+		_CheckPath(path)
 		with self._lock:
 			return [x.name for x in self.scandir(path)]
 
 	def makedir(self, path, permissions=None, recreate=False):
+		_CheckPath(path)
 		with self._lock:
 			info(f"makedir: {path}, {permissions}, {recreate}")
 			parentMetadata = self._itemFromPath(dirname(path))
@@ -218,6 +222,7 @@ class GoogleDriveFS(FS):
 			return SubFS(self, path)
 
 	def openbin(self, path, mode="r", buffering=-1, **options):
+		_CheckPath(path)
 		with self._lock:
 			info(f"openbin: {path}, {mode}, {buffering}")
 			parsedMode = Mode(mode)
@@ -236,6 +241,7 @@ class GoogleDriveFS(FS):
 			return _UploadOnClose(fs=self, path=path, parsedMode=parsedMode)
 
 	def remove(self, path):
+		_CheckPath(path)
 		with self._lock:
 			info(f"remove: {path}")
 			metadata = self._itemFromPath(path)
@@ -244,6 +250,7 @@ class GoogleDriveFS(FS):
 			self.drive.files().delete(fileId=metadata["id"]).execute()
 
 	def removedir(self, path):
+		_CheckPath(path)
 		with self._lock:
 			info(f"removedir: {path}")
 			metadata = self._itemFromPath(path)
@@ -253,6 +260,7 @@ class GoogleDriveFS(FS):
 
 	# non-essential method - for speeding up walk
 	def scandir(self, path, namespaces=None, page=None):
+		_CheckPath(path)
 		with self._lock:
 			info(f"remove: {path}, {namespaces}, {page}")
 			metadata = self._itemFromPath(path)
