@@ -9,8 +9,8 @@ from os import close, remove
 from os.path import join as osJoin, splitext
 from tempfile import gettempdir, mkstemp
 
-from apiclient.discovery import build
-from apiclient.http import MediaFileUpload, MediaIoBaseUpload
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload, MediaIoBaseUpload
 from ..base import FS
 # from fs.base import FS
 from fs.enums import ResourceType
@@ -23,6 +23,10 @@ from fs.subfs import SubFS
 from fs.time import datetime_to_epoch, epoch_to_datetime
 from httplib2 import FileCache, Http, ServerNotFoundError
 
+_fileMimeType = "application/vnd.google-apps.file"
+_folderMimeType = "application/vnd.google-apps.folder"
+_INVALID_PATH_CHARS = ":\0"
+
 def _SafeCacheName(x):
 	m = md5()
 	m.update(x.encode("utf-8"))
@@ -32,10 +36,6 @@ def _Escape(name):
 	name = name.replace("\\", "\\\\")
 	name = name.replace("'", r"\'")
 	return name
-
-_fileMimeType = "application/vnd.google-apps.file"
-_folderMimeType = "application/vnd.google-apps.folder"
-_INVALID_PATH_CHARS = ":\0"
 
 def _CheckPath(path):
 	for char in _INVALID_PATH_CHARS:
@@ -94,7 +94,7 @@ class _UploadOnClose(RawWrapper):
 				while response is None:
 					status, response = request.next_chunk()
 					debug(f"{status}: {response}")
-				# MediaFileUpload doesn't close it's file handle, so we have to workaround it
+				# MediaFileUpload doesn't close it's file handle, so we have to workaround it (https://github.com/googleapis/google-api-python-client/issues/575)
 				upload._fd.close()
 			else:
 				fh = BytesIO(b"")
