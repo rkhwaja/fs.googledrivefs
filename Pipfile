@@ -10,6 +10,8 @@ google-api-python-client = "*"
 
 [dev-packages]
 pytest = "*"
+requests-oauthlib = "*"
+pyperclip = "*"
 
 [requires]
 python_version = "3.7"
