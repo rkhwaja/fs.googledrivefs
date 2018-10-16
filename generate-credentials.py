@@ -66,4 +66,4 @@ def AuthorizeNew(clientId, clientSecret, tokenStoragePath):
 	return token
 
 if __name__ == "__main__":
-	Authorize(environ["GOOGLEDRIVEFS_TEST_CLIENT_ID"], environ["GOOGLEDRIVEFS_TEST_CLIENT_SECRET"], environ["GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH"])
+	AuthorizeNew(environ["GOOGLEDRIVEFS_TEST_CLIENT_ID"], environ["GOOGLEDRIVEFS_TEST_CLIENT_SECRET"], environ["GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH"])

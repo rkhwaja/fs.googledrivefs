@@ -114,13 +114,10 @@ class _UploadOnClose(RawWrapper):
 		remove(self.localPath)
 
 class GoogleDriveFS(FS):
-	def __init__new(self, credentials):
+	def __init__(self, credentials):
 		super().__init__()
 
-		cache = FileCache(osJoin(gettempdir(), ".httpcache"), safe=_SafeCacheName)
-		http = Http(cache, timeout=60)
-		http = credentials.authorize(http)
-		self.drive = build("drive", "v3", http=http)
+		self.drive = build("drive", "v3", credentials=credentials)
 
 		_meta = self._meta = {
 			"case_insensitive": True, # it will even let you have 2 identical filenames in the same directory! But the search is case-insensitive
@@ -132,7 +129,7 @@ class GoogleDriveFS(FS):
 			"supports_rename": False # since we don't have a syspath...
 		}
 
-	def __init__(self, credentials):
+	def __init__old(self, credentials):
 		super().__init__()
 		# do the authentication outside
 		assert credentials is not None and credentials.invalid is False, "Invalid or misssing credentials"
