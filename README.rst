@@ -12,3 +12,7 @@ Usage
     credentials=<google-auth credentials>)
 
   # fs is now a standard pyfilesystem2 file system
+
+  fs2 = open_fs("googledrive:///?access_token=<oauth2 access token>")
+
+  # fs2 is now a standard pyfilesystem2 file system
