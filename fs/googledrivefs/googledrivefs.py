@@ -1,18 +1,16 @@
 from __future__ import absolute_import
 
-from contextlib import contextmanager
 from datetime import datetime
 from hashlib import md5
 from io import BytesIO, SEEK_END
 from logging import debug, info
 from os import close, remove
-from os.path import join as osJoin, splitext
-from tempfile import gettempdir, mkstemp
+from os.path import splitext
+from tempfile import mkstemp
 
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseUpload
 from ..base import FS
-# from fs.base import FS
 from fs.enums import ResourceType
 from fs.errors import DirectoryExists, DirectoryExpected, DirectoryNotEmpty, FileExists, FileExpected, InvalidCharsInPath, ResourceNotFound
 from fs.info import Info
@@ -20,8 +18,7 @@ from fs.iotools import RawWrapper
 from fs.mode import Mode
 from fs.path import basename, dirname, iteratepath
 from fs.subfs import SubFS
-from fs.time import datetime_to_epoch, epoch_to_datetime
-from httplib2 import FileCache, Http, ServerNotFoundError
+from fs.time import datetime_to_epoch
 
 _fileMimeType = "application/vnd.google-apps.file"
 _folderMimeType = "application/vnd.google-apps.folder"
@@ -47,8 +44,9 @@ class _UploadOnClose(RawWrapper):
 	def __init__(self, fs, path, parsedMode):
 		self.fs = fs
 		self.path = path
-		self.parentMetadata = self.fs._itemFromPath(dirname(self.path))
-		self.thisMetadata = self.fs._itemFromPath(self.path) # may be None
+		self.parentMetadata = self.fs._itemFromPath(dirname(self.path)) # pylint: disable=protected-access
+		# None here means we'll have to create a new file later
+		self.thisMetadata = self.fs._itemFromPath(self.path)  # pylint: disable=protected-access
 		# keeping a parsed mode separate from the base class's mode member
 		self.parsedMode = parsedMode
 		fileHandle, self.localPath = mkstemp(prefix="pyfilesystem-googledrive-", suffix=splitext(self.path)[1], text=False)
@@ -95,7 +93,7 @@ class _UploadOnClose(RawWrapper):
 					status, response = request.next_chunk()
 					debug(f"{status}: {response}")
 				# MediaFileUpload doesn't close it's file handle, so we have to workaround it (https://github.com/googleapis/google-api-python-client/issues/575)
-				upload._fd.close()
+				upload._fd.close() # pylint: disable=protected-access
 			else:
 				fh = BytesIO(b"")
 				media = MediaIoBaseUpload(fh, mimetype="application/octet-stream", chunksize=-1, resumable=False)
@@ -118,26 +116,6 @@ class GoogleDriveFS(FS):
 		super().__init__()
 
 		self.drive = build("drive", "v3", credentials=credentials)
-
-		_meta = self._meta = {
-			"case_insensitive": True, # it will even let you have 2 identical filenames in the same directory! But the search is case-insensitive
-			"invalid_path_chars": _INVALID_PATH_CHARS, # not sure what else
-			"max_path_length": None, # don't know what the limit is
-			"max_sys_path_length": None, # there's no syspath
-			"network": True,
-			"read_only": False,
-			"supports_rename": False # since we don't have a syspath...
-		}
-
-	def __init__old(self, credentials):
-		super().__init__()
-		# do the authentication outside
-		assert credentials is not None and credentials.invalid is False, "Invalid or misssing credentials"
-
-		cache = FileCache(osJoin(gettempdir(), ".httpcache"), safe=_SafeCacheName)
-		http = Http(cache, timeout=60)
-		http = credentials.authorize(http)
-		self.drive = build("drive", "v3", http=http)
 
 		_meta = self._meta = {
 			"case_insensitive": True, # it will even let you have 2 identical filenames in the same directory! But the search is case-insensitive
@@ -177,7 +155,7 @@ class GoogleDriveFS(FS):
 	def _itemFromPath(self, path):
 		metadata = None
 		for component in iteratepath(path):
-			metadata = self._childByName(metadata["id"] if metadata is not None else None, component)
+			metadata = self._childByName(metadata["id"] if metadata is not None else None, component) # pylint: disable=unsubscriptable-object
 			if metadata is None:
 				return None
 		return metadata
@@ -202,7 +180,7 @@ class GoogleDriveFS(FS):
 		# there is also file-type-specific metadata like imageMediaMetadata
 		return Info(rawInfo)
 
-	def getinfo(self, path, namespaces=None):
+	def getinfo(self, path, namespaces=None): # pylint: disable=unused-argument
 		_CheckPath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
@@ -210,7 +188,7 @@ class GoogleDriveFS(FS):
 				raise ResourceNotFound(path=path)
 			return self._infoFromMetadata(metadata)
 
-	def setinfo(self, path, info): # pylint: disable=too-many-branches
+	def setinfo(self, path, info): # pylint: disable=redefined-outer-name,too-many-branches,unused-argument
 		_CheckPath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
@@ -236,10 +214,10 @@ class GoogleDriveFS(FS):
 				else:
 					return SubFS(self, path)
 			newMetadata = {"name": basename(path), "parents": [parentMetadata["id"]], "mimeType": _folderMimeType}
-			newMetadataId = self.drive.files().create(body=newMetadata, fields="id").execute()
+			_ = self.drive.files().create(body=newMetadata, fields="id").execute()
 			return SubFS(self, path)
 
-	def openbin(self, path, mode="r", buffering=-1, **options):
+	def openbin(self, path, mode="r", buffering=-1, **options): # pylint: disable=unused-argument
 		_CheckPath(path)
 		with self._lock:
 			info(f"openbin: {path}, {mode}, {buffering}")

@@ -1,26 +1,7 @@
 #!/usr/bin/env pipenv run python
 
-from argparse import Namespace
 from json import dump, load
 from os import environ
-
-_SCOPE = "https://www.googleapis.com/auth/drive"
-
-def Authorize(clientId, clientSecret, credentialsPath):
-	from oauth2client import GOOGLE_AUTH_URI, GOOGLE_REVOKE_URI, GOOGLE_TOKEN_URI
-	from oauth2client.client import OAuth2WebServerFlow
-	from oauth2client.file import Storage
-	from oauth2client.tools import run_flow
-
-	storage = Storage(credentialsPath)
-	credentials = storage.get()
-	if credentials is None or credentials.invalid is True:
-		flow = OAuth2WebServerFlow(clientId, clientSecret, scope=_SCOPE, auth_uri=GOOGLE_AUTH_URI, token_uri=GOOGLE_TOKEN_URI, revoke_uri=GOOGLE_REVOKE_URI)
-		flags = Namespace()
-		flags.logging_level = "INFO"
-		flags.noauth_local_webserver = True
-		credentials = run_flow(flow, storage, flags)
-	return credentials
 
 class TokenStorageFile:
 	"""Stores the API tokens as a file"""
@@ -41,11 +22,12 @@ class TokenStorageFile:
 		except FileNotFoundError:
 			return None
 
-def AuthorizeNew(clientId, clientSecret, tokenStoragePath):
+def Authorize(clientId, clientSecret, tokenStoragePath):
 	from requests_oauthlib import OAuth2Session
 
 	tokenStorage = TokenStorageFile(tokenStoragePath)
 	authorizationBaseUrl = "https://accounts.google.com/o/oauth2/v2/auth"
+	_SCOPE = "https://www.googleapis.com/auth/drive"
 	session = OAuth2Session(client_id=clientId, scope=_SCOPE, redirect_uri="https://localhost")
 	authorizationUrl, _ = session.authorization_url(authorizationBaseUrl)
 	print(f"Go to the following URL and authorize the app: {authorizationUrl}")
@@ -66,4 +48,4 @@ def AuthorizeNew(clientId, clientSecret, tokenStoragePath):
 	return token
 
 if __name__ == "__main__":
-	AuthorizeNew(environ["GOOGLEDRIVEFS_TEST_CLIENT_ID"], environ["GOOGLEDRIVEFS_TEST_CLIENT_SECRET"], environ["GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH"])
+	Authorize(environ["GOOGLEDRIVEFS_TEST_CLIENT_ID"], environ["GOOGLEDRIVEFS_TEST_CLIENT_SECRET"], environ["GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH"])
