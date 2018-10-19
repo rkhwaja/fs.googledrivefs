@@ -13,6 +13,6 @@ Usage
 
   # fs is now a standard pyfilesystem2 file system
 
-  fs2 = open_fs("googledrive:///?access_token=<oauth2 access token>&refresh_token=<oauth2 access token>&client_id=<oauth2 client id>&client_secret=<oauth2 client_secret>")
+  fs2 = open_fs("googledrive:///?access_token=<oauth2 access token>&refresh_token=<oauth2 refresh token>&client_id=<oauth2 client id>&client_secret=<oauth2 client_secret>")
 
   # fs2 is now a standard pyfilesystem2 file system
