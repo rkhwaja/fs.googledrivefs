@@ -2,13 +2,13 @@
 __pycache__/
 
 # Distribution / packaging
-build/
 dist/
-*.egg-info/
 
 # MacOS
 .DS_Store
 
 .env
 .pytest_cache
-Pipfile.lock
+poetry.lock
+*.json
+.idea

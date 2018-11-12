@@ -1,0 +1,32 @@
+[tool.poetry]
+name = "fs.googledrivefs"
+packages = [
+    { include = "fs/googledrivefs/*.py"}
+]
+version = "1.0.2"
+description = "Pyfilesystem2 implementation for Google Drive"
+authors = ["Rehan Khwaja <rehan@khwaja.name>"]
+license = "MIT"
+homepage = "https://github.com/rkhwaja/fs.googledrivefs"
+keywords = ["filesystem", "Pyfilesystem2", "google"]
+readme = "README.rst"
+
+[tool.poetry.dependencies]
+python = ">=3.6"
+fs = ">=2.0.7"
+google-api-python-client = ">=1.6.3"
+google-auth = ">=1.5.1"
+
+[tool.poetry.dev-dependencies]
+pytest = "^3.10"
+requests-oauthlib = "^1.0"
+pyperclip = "^1.7"
+
+[tool.poetry.plugins] # Optional super table
+
+[tool.poetry.plugins."fs.opener"]
+"googledrive" = "fs.googledrivefs.opener:GoogleDriveFSOpener"
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
