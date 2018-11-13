@@ -3,12 +3,20 @@ __pycache__/
 
 # Distribution / packaging
 dist/
+poetry.lock
 
 # MacOS
 .DS_Store
 
-.env
+# pytest
 .pytest_cache
-poetry.lock
+.env
 *.json
+
+# pycharm
 .idea
+
+# windows
+.vs
+*.pyproj
+*.sln
