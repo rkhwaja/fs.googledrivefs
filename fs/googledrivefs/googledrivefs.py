@@ -24,11 +24,6 @@ _fileMimeType = "application/vnd.google-apps.file"
 _folderMimeType = "application/vnd.google-apps.folder"
 _INVALID_PATH_CHARS = ":\0"
 
-def _SafeCacheName(x):
-	m = md5()
-	m.update(x.encode("utf-8"))
-	return m.hexdigest()
-
 def _Escape(name):
 	name = name.replace("\\", "\\\\")
 	name = name.replace("'", r"\'")
