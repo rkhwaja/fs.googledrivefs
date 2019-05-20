@@ -110,7 +110,7 @@ class GoogleDriveFS(FS):
 	def __init__(self, credentials):
 		super().__init__()
 
-		self.drive = build("drive", "v3", credentials=credentials)
+		self.drive = build("drive", "v3", credentials=credentials, cache_discovery=False)
 
 		_meta = self._meta = {
 			"case_insensitive": True, # it will even let you have 2 identical filenames in the same directory! But the search is case-insensitive
