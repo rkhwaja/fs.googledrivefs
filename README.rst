@@ -8,8 +8,7 @@ Usage
 
 .. code-block:: python
 
-  fs = GoogleDriveFS(
-    credentials=<google-auth credentials>)
+  fs = GoogleDriveFS(credentials=<google-auth credentials>)
 
   # fs is now a standard pyfilesystem2 file system
 
@@ -29,6 +28,7 @@ GOOGLEDRIVEFS_TEST_CLIENT_SECRET - your client secret (see Google Developer Cons
 Then generate the credentials by running
 
 .. code-block:: bash
+
   python generate-credentials.py
 
 Then run the tests by executing
@@ -37,4 +37,4 @@ Then run the tests by executing
 
   pytest
 
-in the root directory. The tests may take an hour or two to complete. They create and destroy many, many files and directories exclusively under the /test-googledrivefs directory in the users Google Drive
+in the root directory. The tests may take an hour or two to complete. They create and destroy many, many files and directories exclusively under the /test-googledrivefs directory in the user's Google Drive
