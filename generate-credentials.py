@@ -1,7 +1,9 @@
-#!/usr/bin/env pipenv run python
+#!/usr/bin/env python
 
 from json import dump, load
 from os import environ
+
+from requests_oauthlib import OAuth2Session
 
 class TokenStorageFile:
 	"""Stores the API tokens as a file"""
@@ -23,13 +25,11 @@ class TokenStorageFile:
 			return None
 
 def Authorize(clientId, clientSecret, tokenStoragePath):
-	from requests_oauthlib import OAuth2Session
-
 	tokenStorage = TokenStorageFile(tokenStoragePath)
 	authorizationBaseUrl = "https://accounts.google.com/o/oauth2/v2/auth"
 	_SCOPE = "https://www.googleapis.com/auth/drive"
 	session = OAuth2Session(client_id=clientId, scope=_SCOPE, redirect_uri="https://localhost")
-	authorizationUrl, _ = session.authorization_url(authorizationBaseUrl)
+	authorizationUrl, _ = session.authorization_url(authorizationBaseUrl, access_type="offline")
 	print(f"Go to the following URL and authorize the app: {authorizationUrl}")
 
 	try:
