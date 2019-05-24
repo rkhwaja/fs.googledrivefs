@@ -1,7 +1,6 @@
 from __future__ import absolute_import
 
 from datetime import datetime
-from hashlib import md5
 from io import BytesIO, SEEK_END
 from logging import debug, info
 from os import close, remove
@@ -22,6 +21,7 @@ from fs.time import datetime_to_epoch
 
 _fileMimeType = "application/vnd.google-apps.file"
 _folderMimeType = "application/vnd.google-apps.folder"
+_sharingUrl = "https://drive.google.com/open?id="
 _INVALID_PATH_CHARS = ":\0"
 
 def _Escape(name):
@@ -126,11 +126,15 @@ class GoogleDriveFS(FS):
 		return "<GoogleDriveFS>"
 
 	def _childByName(self, parentId, childName):
-		# this "name=" clause seems to be case-insensitive, which means it's easier to model this as a case-insensitive filesystem
+		# this "name=" clause seems to be case-insensitive, which means it's easier to model this
+		# as a case-insensitive filesystem
 		query = f"trashed=False and name='{_Escape(childName)}'"
 		if parentId is not None:
 			query = query +  f" and '{parentId}' in parents"
-		result = self.drive.files().list(q=query, fields="files(id,mimeType,kind,name,createdTime,modifiedTime,size)").execute()
+		result = self.drive\
+			.files()\
+			.list(q=query, fields="files(id,mimeType,kind,name,createdTime,modifiedTime,size,permissions)")\
+			.execute()
 		if len(result["files"]) not in [0, 1]:
 			# Google drive doesn't follow the model of a filesystem, really
 			# but since most people will set it up to follow the model, we'll carry on regardless
@@ -144,7 +148,10 @@ class GoogleDriveFS(FS):
 		query = f"trashed=False"
 		if parentId is not None:
 			query = query +  f" and '{parentId}' in parents"
-		result = self.drive.files().list(q=query, fields="files(id,mimeType,kind,name,createdTime,modifiedTime,size)").execute()
+		result = self.drive\
+			.files()\
+			.list(q=query, fields="files(id,mimeType,kind,name,createdTime,modifiedTime,size,permissions)")\
+			.execute()
 		return result["files"]
 
 	def _itemFromPath(self, path):
@@ -161,7 +168,7 @@ class GoogleDriveFS(FS):
 		rawInfo = {
 			"basic": {
 				"name": metadata["name"],
-				"is_dir": isFolder,
+				"is_dir": isFolder
 				},
 			"details": {
 				"accessed": None, # not supported by Google Drive API
@@ -170,6 +177,11 @@ class GoogleDriveFS(FS):
 				"modified": datetime_to_epoch(datetime.strptime(metadata["modifiedTime"], rfc3339)),
 				"size": int(metadata["size"]) if isFolder is False else None, # folders have no size
 				"type": ResourceType.directory if isFolder else ResourceType.file
+				},
+			"sharing": {
+				"id": metadata["id"],
+				"permissions": metadata["permissions"],
+				"is_shared": True if len(metadata["permissions"]) > 1 else False
 				}
 			}
 		# there is also file-type-specific metadata like imageMediaMetadata
@@ -189,6 +201,9 @@ class GoogleDriveFS(FS):
 			metadata = self._itemFromPath(path)
 			if metadata is None:
 				raise ResourceNotFound(path=path)
+				
+	def geturl(self, path, purpose="download"):
+		return _sharingUrl + self.getinfo(path).get("sharing", "id")
 
 	def listdir(self, path):
 		_CheckPath(path)
