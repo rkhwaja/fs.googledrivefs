@@ -9,7 +9,7 @@ from tempfile import mkstemp
 
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseUpload
-from ..base import FS
+from fs.base import FS
 from fs.enums import ResourceType
 from fs.errors import DirectoryExists, DirectoryExpected, DirectoryNotEmpty, FileExists, FileExpected, InvalidCharsInPath, ResourceNotFound
 from fs.info import Info
@@ -181,7 +181,7 @@ class GoogleDriveFS(FS):
 			"sharing": {
 				"id": metadata["id"],
 				"permissions": metadata["permissions"],
-				"is_shared": True if len(metadata["permissions"]) > 1 else False
+				"is_shared": len(metadata["permissions"]) > 1
 				}
 			}
 		# there is also file-type-specific metadata like imageMediaMetadata
@@ -201,8 +201,8 @@ class GoogleDriveFS(FS):
 			metadata = self._itemFromPath(path)
 			if metadata is None:
 				raise ResourceNotFound(path=path)
-				
-	def geturl(self, path, purpose="download"):
+
+	def geturl(self, path, purpose="download"): # pylint: disable=unused-argument
 		return _sharingUrl + self.getinfo(path).get("sharing", "id")
 
 	def listdir(self, path):
@@ -221,8 +221,7 @@ class GoogleDriveFS(FS):
 			if childMetadata is not None:
 				if recreate is False:
 					raise DirectoryExists(path=path)
-				else:
-					return SubFS(self, path)
+				return SubFS(self, path)
 			newMetadata = {"name": basename(path), "parents": [parentMetadata["id"]], "mimeType": _folderMimeType}
 			_ = self.drive.files().create(body=newMetadata, fields="id").execute()
 			return SubFS(self, path)
@@ -235,9 +234,9 @@ class GoogleDriveFS(FS):
 			exists = self.exists(path)
 			if parsedMode.exclusive and exists:
 				raise FileExists(path)
-			elif parsedMode.reading and not parsedMode.create and not exists:
+			if parsedMode.reading and not parsedMode.create and not exists:
 				raise ResourceNotFound(path)
-			elif self.isdir(path):
+			if self.isdir(path):
 				raise FileExpected(path)
 			if parsedMode.writing:
 				# make sure that the parent directory exists
