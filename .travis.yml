@@ -4,9 +4,7 @@ python:
 - "3.7"
 dist: xenial
 install:
-- pip install poetry
-- poetry config settings.virtualenvs.create false
-- poetry install
+- pip install fs google-api-python-client google-auth pylint
 script:
 - pylint fs/googledrivefs/
 - pylint tests/
