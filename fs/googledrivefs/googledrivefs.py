@@ -11,7 +11,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseUpload
 from fs.base import FS
 from fs.enums import ResourceType
-from fs.errors import DirectoryExists, DirectoryExpected, DirectoryNotEmpty, FileExists, FileExpected, InvalidCharsInPath, ResourceNotFound
+from fs.errors import DirectoryExists, DirectoryExpected, DirectoryNotEmpty, FileExists, FileExpected, InvalidCharsInPath, ResourceNotFound, OperationFailed
 from fs.info import Info
 from fs.iotools import RawWrapper
 from fs.mode import Mode
@@ -201,6 +201,28 @@ class GoogleDriveFS(FS):
 			metadata = self._itemFromPath(path)
 			if metadata is None:
 				raise ResourceNotFound(path=path)
+				
+	def share(self, path, email=None, role='reader'):
+		"""
+		Shares item. 
+		:param path: item path
+		:param email: email of gmail-user to share item. If None, will share with anybody.
+		:param role: google drive sharing role
+		:return: URL
+		"""
+		_CheckPath(path)
+		with self._lock:
+			metadata = self._itemFromPath(path)
+			if metadata is None or type(metadata) is list:
+				raise ResourceNotFound(path=path)
+			if role not in ('reader', 'writer', 'commenter', 'fileOrganizer', 'organizer', 'owner'):
+				raise OperationFailed(path=path, msg=f'unknown sharing role: {role}')
+			if email:
+				permissions = {'role': role, 'type': 'user', 'emailAddress': email}
+			else:
+				permissions = {'role': role, 'type': 'anyone'}
+			self.drive.permissions().create(fileId=metadata['id'], body=permissions).execute()
+			return self.geturl(path)
 
 	def geturl(self, path, purpose="download"): # pylint: disable=unused-argument
 		return _sharingUrl + self.getinfo(path).get("sharing", "id")
