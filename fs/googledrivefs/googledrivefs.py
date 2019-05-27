@@ -201,10 +201,10 @@ class GoogleDriveFS(FS):
 			metadata = self._itemFromPath(path)
 			if metadata is None:
 				raise ResourceNotFound(path=path)
-				
+
 	def share(self, path, email=None, role='reader'):
 		"""
-		Shares item. 
+		Shares item.
 		:param path: item path
 		:param email: email of gmail-user to share item. If None, will share with anybody.
 		:param role: google drive sharing role
@@ -213,7 +213,7 @@ class GoogleDriveFS(FS):
 		_CheckPath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
-			if metadata is None or type(metadata) is list:
+			if metadata is None or isinstance(metadata, list):
 				raise ResourceNotFound(path=path)
 			if role not in ('reader', 'writer', 'commenter', 'fileOrganizer', 'organizer', 'owner'):
 				raise OperationFailed(path=path, msg=f'unknown sharing role: {role}')
