@@ -11,7 +11,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseUpload
 from fs.base import FS
 from fs.enums import ResourceType
-from fs.errors import DirectoryExists, DirectoryExpected, DirectoryNotEmpty, FileExists, FileExpected, InvalidCharsInPath, ResourceNotFound, OperationFailed
+from fs.errors import DirectoryExists, DirectoryExpected, DirectoryNotEmpty, FileExists, FileExpected, InvalidCharsInPath, NoURL, ResourceNotFound, OperationFailed
 from fs.info import Info
 from fs.iotools import RawWrapper
 from fs.mode import Mode
@@ -224,8 +224,25 @@ class GoogleDriveFS(FS):
 			self.drive.permissions().create(fileId=metadata['id'], body=permissions).execute()
 			return self.geturl(path)
 
+	def hasurl(self, path, purpose="download"):
+		_CheckPath(path)
+		if purpose != "download":
+			raise NoURL(path, purpose, "No such purpose")
+		with self._lock:
+			try:
+				return self.getinfo(path).get("sharing", "is_shared")
+			except ResourceNotFound:
+				return False
+
 	def geturl(self, path, purpose="download"): # pylint: disable=unused-argument
-		return _sharingUrl + self.getinfo(path).get("sharing", "id")
+		_CheckPath(path)
+		if purpose != "download":
+			raise NoURL(path, purpose, "No such purpose")
+		with self._lock:
+			fileInfo = self.getinfo(path)
+			if fileInfo.get("sharing", "is_shared") is False:
+				raise NoURL(path, purpose, f"{path} is not shared")
+			return _sharingUrl + fileInfo.get("sharing", "id")
 
 	def listdir(self, path):
 		_CheckPath(path)
