@@ -174,26 +174,26 @@ class GoogleDriveFS(FS):
 		return metadata
 
 	def _infoFromMetadata(self, metadata):  # pylint: disable=no-self-use
-		isFolder = (metadata["mimeType"] == _folderMimeType)
+		isRoot = type(metadata) is list
+		isFolder = isRoot or (metadata["mimeType"] == _folderMimeType)
 		rfc3339 = "%Y-%m-%dT%H:%M:%S.%fZ"
 		rawInfo = {
 			"basic": {
-				"name": metadata["name"],
+				"name": "" if isRoot else metadata["name"],
 				"is_dir": isFolder
 			},
 			"details": {
 				"accessed": None,  # not supported by Google Drive API
-				"created": datetime_to_epoch(datetime.strptime(metadata["createdTime"], rfc3339)),
+				"created": None if isRoot else datetime_to_epoch(datetime.strptime(metadata["createdTime"], rfc3339)),
 				"metadata_changed": None,  # not supported by Google Drive API
-				"modified": datetime_to_epoch(datetime.strptime(metadata["modifiedTime"], rfc3339)),
-				"size": int(metadata["size"]) if isFolder is False else None,  # folders have no size
+				"modified": None if isRoot else datetime_to_epoch(datetime.strptime(metadata["modifiedTime"], rfc3339)),
+				"size": None if isRoot else int(metadata["size"]) if isFolder is False else None, # folders have no size
 				"type": ResourceType.directory if isFolder else ResourceType.file
 			},
 			"sharing": {
-				"id": metadata["id"],
-				"permissions": metadata["permissions"],
-				"is_shared": len(metadata["permissions"]) > 1
-				}
+				"id": None if isRoot else metadata["id"],
+				"permissions": None if isRoot else metadata["permissions"],
+				"is_shared": None if isRoot else len(metadata["permissions"]) > 1
 			}
 		}
 		# there is also file-type-specific metadata like imageMediaMetadata
