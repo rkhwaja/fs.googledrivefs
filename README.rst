@@ -1,6 +1,9 @@
 fs.googledrivefs
 ================
 
+.. image:: https://travis-ci.org/rkhwaja/fs.googledrivefs.svg?branch=master
+    :target: https://travis-ci.org/rkhwaja/fs.googledrivefs
+
 Implementation of pyfilesystem2 file system for Google Drive
 
 Usage
