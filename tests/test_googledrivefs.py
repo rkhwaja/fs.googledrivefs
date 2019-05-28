@@ -29,6 +29,6 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 	def destroy_fs(self, fs):
 		self.fullFS.removetree(self.testSubdir)
 
-	def testRoot(self): # pylint: disable=no-self-use
-		fullFS = FullFS()
-		info(fullFS.listdir("/"))
+def testRoot(): # pylint: disable=no-self-use
+	fullFS = FullFS()
+	info(fullFS.listdir("/"))
