@@ -187,7 +187,7 @@ class GoogleDriveFS(FS):
 				"created": None if isRoot else datetime_to_epoch(datetime.strptime(metadata["createdTime"], rfc3339)),
 				"metadata_changed": None,  # not supported by Google Drive API
 				"modified": None if isRoot else datetime_to_epoch(datetime.strptime(metadata["modifiedTime"], rfc3339)),
-				"size": None if isRoot else int(metadata["size"]) if isFolder is False else None, # folders have no size
+				"size": None if isRoot or isFolder else int(metadata["size"]), # folders have no size
 				"type": ResourceType.directory if isFolder else ResourceType.file
 			},
 			"sharing": {
