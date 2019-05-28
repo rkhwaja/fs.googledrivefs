@@ -24,7 +24,6 @@ _folderMimeType = "application/vnd.google-apps.folder"
 _sharingUrl = "https://drive.google.com/open?id="
 _INVALID_PATH_CHARS = ":\0"
 
-
 def _Escape(name):
 	name = name.replace("\\", "\\\\")
 	name = name.replace("'", r"\'")
@@ -133,6 +132,10 @@ class GoogleDriveFS(FS):
 	def __repr__(self):
 		return "<GoogleDriveFS>"
 
+	def _fileQuery(self, query):
+		allFields = "files(id,mimeType,kind,name,createdTime,modifiedTime,size,permissions)"
+		return self.drive.files().list(q=query, fields=allFields).execute()
+
 	def _childByName(self, parentId, childName):
 		# this "name=" clause seems to be case-insensitive, which means it's easier to model this
 		# as a case-insensitive filesystem
@@ -140,10 +143,7 @@ class GoogleDriveFS(FS):
 			parentId = 'root'
 			# Google drive seems to somehow distinguish it's real root folder from folder named "root" in root folder.
 		query = f"trashed=False and name='{_Escape(childName)}' and '{parentId}' in parents"
-		result = self.drive\
-			.files()\
-			.list(q=query, fields="files(id,mimeType,kind,name,createdTime,modifiedTime,size,permissions)")\
-			.execute()
+		result = self._fileQuery(query)
 		if len(result["files"]) not in [0, 1]:
 			# Google drive doesn't follow the model of a filesystem, really
 			# but since most people will set it up to follow the model, we'll carry on regardless
@@ -156,10 +156,7 @@ class GoogleDriveFS(FS):
 			parentId = 'root'
 			# Google drive seems to somehow distinguish it's real root folder from folder named "root" in root folder.
 		query = f"trashed=False and '{parentId}' in parents"
-		result = self.drive \
-			.files() \
-			.list(q=query, fields="files(id,mimeType,kind,name,createdTime,modifiedTime,size,permissions)") \
-			.execute()
+		result = self._fileQuery(query)
 		return result["files"]
 
 	def _itemFromPath(self, path):
@@ -167,14 +164,14 @@ class GoogleDriveFS(FS):
 		ipath = iteratepath(path)
 		if ipath:
 			for child_name in ipath:
-				parent_id = metadata["id"] if metadata else None
-				metadata = self._childByName(parent_id, child_name) # pylint: disable=unsubscriptable-object
+				parent_id = metadata["id"] if metadata else None # pylint: disable=unsubscriptable-object
+				metadata = self._childByName(parent_id, child_name)
 		else:
 			metadata = self._childrenById(None) # querying root folder. will return a list, not dict
 		return metadata
 
 	def _infoFromMetadata(self, metadata):  # pylint: disable=no-self-use
-		isRoot = type(metadata) is list
+		isRoot = isinstance(metadata, list)
 		isFolder = isRoot or (metadata["mimeType"] == _folderMimeType)
 		rfc3339 = "%Y-%m-%dT%H:%M:%S.%fZ"
 		rawInfo = {
@@ -203,7 +200,7 @@ class GoogleDriveFS(FS):
 		_CheckPath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
-			if metadata is None or type(metadata) is list:
+			if metadata is None or isinstance(metadata, list):
 				raise ResourceNotFound(path=path)
 			return self._infoFromMetadata(metadata)
 
@@ -211,7 +208,7 @@ class GoogleDriveFS(FS):
 		_CheckPath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
-			if metadata is None or type(metadata) is list:
+			if metadata is None or isinstance(metadata, list):
 				raise ResourceNotFound(path=path)
 
 	def share(self, path, email=None, role='reader'):
@@ -272,11 +269,10 @@ class GoogleDriveFS(FS):
 			info(f"makedir: {path}, {permissions}, {recreate}")
 			parentMetadata = self._itemFromPath(dirname(path))
 
-			if type(parentMetadata) is list: # adding new folder to root folder
+			if isinstance(parentMetadata, list): # adding new folder to root folder
 				if not self._childByName(None, path):
 					return self._create_subdirectory(path)
-				else:
-					raise DirectoryExists(path=path)
+				raise DirectoryExists(path=path)
 
 			if parentMetadata is None:
 				raise ResourceNotFound(path=path)
@@ -350,7 +346,7 @@ class GoogleDriveFS(FS):
 			metadata = self._itemFromPath(path)
 			if metadata is None:
 				raise ResourceNotFound(path=path)
-			if type(metadata) is list: # root folder
+			if isinstance(metadata, list): # root folder
 				children = self._childrenById(None)
 				return self._generate_children(children, page)
 			if metadata["mimeType"] != _folderMimeType:
