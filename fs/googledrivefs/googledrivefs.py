@@ -24,27 +24,31 @@ _folderMimeType = "application/vnd.google-apps.folder"
 _sharingUrl = "https://drive.google.com/open?id="
 _INVALID_PATH_CHARS = ":\0"
 
+
 def _Escape(name):
 	name = name.replace("\\", "\\\\")
 	name = name.replace("'", r"\'")
 	return name
+
 
 def _CheckPath(path):
 	for char in _INVALID_PATH_CHARS:
 		if char in path:
 			raise InvalidCharsInPath(path)
 
+
 # TODO - switch to MediaIoBaseUpload and use BytesIO
 class _UploadOnClose(RawWrapper):
 	def __init__(self, fs, path, parsedMode):
 		self.fs = fs
 		self.path = path
-		self.parentMetadata = self.fs._itemFromPath(dirname(self.path)) # pylint: disable=protected-access
+		self.parentMetadata = self.fs._itemFromPath(dirname(self.path))  # pylint: disable=protected-access
 		# None here means we'll have to create a new file later
 		self.thisMetadata = self.fs._itemFromPath(self.path)  # pylint: disable=protected-access
 		# keeping a parsed mode separate from the base class's mode member
 		self.parsedMode = parsedMode
-		fileHandle, self.localPath = mkstemp(prefix="pyfilesystem-googledrive-", suffix=splitext(self.path)[1], text=False)
+		fileHandle, self.localPath = mkstemp(prefix="pyfilesystem-googledrive-", suffix=splitext(self.path)[1],
+											 text=False)
 		close(fileHandle)
 		debug(f"self.localPath: {self.localPath}")
 
@@ -63,7 +67,7 @@ class _UploadOnClose(RawWrapper):
 			self.seek(0, SEEK_END)
 
 	def close(self):
-		super().close() # close the file so that it's readable for upload
+		super().close()  # close the file so that it's readable for upload
 		if self.parsedMode.writing:
 			# google doesn't accept the fractional second part
 			now = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
@@ -77,7 +81,8 @@ class _UploadOnClose(RawWrapper):
 				upload = MediaFileUpload(self.localPath, resumable=True)
 				if self.thisMetadata is None:
 					debug("Creating new file")
-					onlineMetadata.update({"name": basename(self.path), "parents": [self.parentMetadata["id"]], "createdTime": now})
+					onlineMetadata.update(
+						{"name": basename(self.path), "parents": [self.parentMetadata["id"]], "createdTime": now})
 					request = self.fs.drive.files().create(body=onlineMetadata, media_body=upload)
 				else:
 					debug("Updating existing file")
@@ -88,12 +93,13 @@ class _UploadOnClose(RawWrapper):
 					status, response = request.next_chunk()
 					debug(f"{status}: {response}")
 				# MediaFileUpload doesn't close it's file handle, so we have to workaround it (https://github.com/googleapis/google-api-python-client/issues/575)
-				upload._fd.close() # pylint: disable=protected-access
+				upload._fd.close()  # pylint: disable=protected-access
 			else:
 				fh = BytesIO(b"")
 				media = MediaIoBaseUpload(fh, mimetype="application/octet-stream", chunksize=-1, resumable=False)
 				if self.thisMetadata is None:
-					onlineMetadata.update({"name": basename(self.path), "parents": [self.parentMetadata["id"]], "createdTime": now})
+					onlineMetadata.update(
+						{"name": basename(self.path), "parents": [self.parentMetadata["id"]], "createdTime": now})
 					createdFile = self.fs.drive.files().create(
 						body=onlineMetadata,
 						media_body=media).execute()
@@ -106,6 +112,7 @@ class _UploadOnClose(RawWrapper):
 					debug(f"Updated file to empty: {updatedFile}")
 		remove(self.localPath)
 
+
 class GoogleDriveFS(FS):
 	def __init__(self, credentials):
 		super().__init__()
@@ -113,13 +120,14 @@ class GoogleDriveFS(FS):
 		self.drive = build("drive", "v3", credentials=credentials, cache_discovery=False)
 
 		_meta = self._meta = {
-			"case_insensitive": True, # it will even let you have 2 identical filenames in the same directory! But the search is case-insensitive
-			"invalid_path_chars": _INVALID_PATH_CHARS, # not sure what else
-			"max_path_length": None, # don't know what the limit is
-			"max_sys_path_length": None, # there's no syspath
+			"case_insensitive": True,
+		# it will even let you have 2 identical filenames in the same directory! But the search is case-insensitive
+			"invalid_path_chars": _INVALID_PATH_CHARS,  # not sure what else
+			"max_path_length": None,  # don't know what the limit is
+			"max_sys_path_length": None,  # there's no syspath
 			"network": True,
 			"read_only": False,
-			"supports_rename": False # since we don't have a syspath...
+			"supports_rename": False  # since we don't have a syspath...
 		}
 
 	def __repr__(self):
@@ -128,9 +136,10 @@ class GoogleDriveFS(FS):
 	def _childByName(self, parentId, childName):
 		# this "name=" clause seems to be case-insensitive, which means it's easier to model this
 		# as a case-insensitive filesystem
-		query = f"trashed=False and name='{_Escape(childName)}'"
-		if parentId is not None:
-			query = query +  f" and '{parentId}' in parents"
+		if not parentId:
+			parentId = 'root'
+			# Google drive seems to somehow distinguish it's real root folder from folder named "root" in root folder.
+		query = f"trashed=False and name='{_Escape(childName)}' and '{parentId}' in parents"
 		result = self.drive\
 			.files()\
 			.list(q=query, fields="files(id,mimeType,kind,name,createdTime,modifiedTime,size,permissions)")\
@@ -140,66 +149,69 @@ class GoogleDriveFS(FS):
 			# but since most people will set it up to follow the model, we'll carry on regardless
 			# and just throw an error when it becomes a problem
 			raise RuntimeError(f"Folder with id {parentId} has more than 1 child with name {childName}")
-		if len(result["files"]) == 0:
-			return None
-		return result["files"][0]
+		return result["files"][0] if result["files"] else None
 
 	def _childrenById(self, parentId):
-		query = f"trashed=False"
-		if parentId is not None:
-			query = query +  f" and '{parentId}' in parents"
-		result = self.drive\
-			.files()\
-			.list(q=query, fields="files(id,mimeType,kind,name,createdTime,modifiedTime,size,permissions)")\
+		if not parentId:
+			parentId = 'root'
+			# Google drive seems to somehow distinguish it's real root folder from folder named "root" in root folder.
+		query = f"trashed=False and '{parentId}' in parents"
+		result = self.drive \
+			.files() \
+			.list(q=query, fields="files(id,mimeType,kind,name,createdTime,modifiedTime,size,permissions)") \
 			.execute()
 		return result["files"]
 
 	def _itemFromPath(self, path):
 		metadata = None
-		for component in iteratepath(path):
-			metadata = self._childByName(metadata["id"] if metadata is not None else None, component) # pylint: disable=unsubscriptable-object
-			if metadata is None:
-				return None
+		ipath = iteratepath(path)
+		if ipath:
+			for child_name in ipath:
+				parent_id = metadata["id"] if metadata else None
+				metadata = self._childByName(parent_id, child_name) # pylint: disable=unsubscriptable-object
+		else:
+			metadata = self._childrenById(None) # querying root folder. will return a list, not dict
 		return metadata
 
-	def _infoFromMetadata(self, metadata): # pylint: disable=no-self-use
-		isFolder = (metadata["mimeType"] == _folderMimeType)
+	def _infoFromMetadata(self, metadata):  # pylint: disable=no-self-use
+		isRoot = type(metadata) is list
+		isFolder = isRoot or (metadata["mimeType"] == _folderMimeType)
 		rfc3339 = "%Y-%m-%dT%H:%M:%S.%fZ"
 		rawInfo = {
 			"basic": {
-				"name": metadata["name"],
+				"name": "" if isRoot else metadata["name"],
 				"is_dir": isFolder
-				},
+			},
 			"details": {
-				"accessed": None, # not supported by Google Drive API
-				"created": datetime_to_epoch(datetime.strptime(metadata["createdTime"], rfc3339)),
-				"metadata_changed": None, # not supported by Google Drive API
-				"modified": datetime_to_epoch(datetime.strptime(metadata["modifiedTime"], rfc3339)),
-				"size": int(metadata["size"]) if isFolder is False else None, # folders have no size
+				"accessed": None,  # not supported by Google Drive API
+				"created": None if isRoot else datetime_to_epoch(datetime.strptime(metadata["createdTime"], rfc3339)),
+				"metadata_changed": None,  # not supported by Google Drive API
+				"modified": None if isRoot else datetime_to_epoch(datetime.strptime(metadata["modifiedTime"], rfc3339)),
+				"size": None if isRoot else int(metadata["size"]) if isFolder is False else None, # folders have no size
 				"type": ResourceType.directory if isFolder else ResourceType.file
-				},
+			},
 			"sharing": {
-				"id": metadata["id"],
-				"permissions": metadata["permissions"],
-				"is_shared": len(metadata["permissions"]) > 1
-				}
+				"id": None if isRoot else metadata["id"],
+				"permissions": None if isRoot else metadata["permissions"],
+				"is_shared": None if isRoot else len(metadata["permissions"]) > 1
 			}
+		}
 		# there is also file-type-specific metadata like imageMediaMetadata
 		return Info(rawInfo)
 
-	def getinfo(self, path, namespaces=None): # pylint: disable=unused-argument
+	def getinfo(self, path, namespaces=None):  # pylint: disable=unused-argument
 		_CheckPath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
-			if metadata is None:
+			if metadata is None or type(metadata) is list:
 				raise ResourceNotFound(path=path)
 			return self._infoFromMetadata(metadata)
 
-	def setinfo(self, path, info): # pylint: disable=redefined-outer-name,too-many-branches,unused-argument
+	def setinfo(self, path, info):  # pylint: disable=redefined-outer-name,too-many-branches,unused-argument
 		_CheckPath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
-			if metadata is None:
+			if metadata is None or type(metadata) is list:
 				raise ResourceNotFound(path=path)
 
 	def share(self, path, email=None, role='reader'):
@@ -249,11 +261,23 @@ class GoogleDriveFS(FS):
 		with self._lock:
 			return [x.name for x in self.scandir(path)]
 
+	def _create_subdirectory(self, name, parents=None):
+		newMetadata = {"name": basename(name), "parents": parents, "mimeType": _folderMimeType}
+		self.drive.files().create(body=newMetadata, fields="id").execute()
+		return SubFS(self, name)
+
 	def makedir(self, path, permissions=None, recreate=False):
 		_CheckPath(path)
 		with self._lock:
 			info(f"makedir: {path}, {permissions}, {recreate}")
 			parentMetadata = self._itemFromPath(dirname(path))
+
+			if type(parentMetadata) is list: # adding new folder to root folder
+				if not self._childByName(None, path):
+					return self._create_subdirectory(path)
+				else:
+					raise DirectoryExists(path=path)
+
 			if parentMetadata is None:
 				raise ResourceNotFound(path=path)
 			childMetadata = self._childByName(parentMetadata["id"], basename(path))
@@ -265,7 +289,7 @@ class GoogleDriveFS(FS):
 			_ = self.drive.files().create(body=newMetadata, fields="id").execute()
 			return SubFS(self, path)
 
-	def openbin(self, path, mode="r", buffering=-1, **options): # pylint: disable=unused-argument
+	def openbin(self, path, mode="r", buffering=-1, **options):  # pylint: disable=unused-argument
 		_CheckPath(path)
 		with self._lock:
 			info(f"openbin: {path}, {mode}, {buffering}")
@@ -280,11 +304,13 @@ class GoogleDriveFS(FS):
 			if parsedMode.writing:
 				# make sure that the parent directory exists
 				parentDir = dirname(path)
-				if self._itemFromPath(parentDir)is None:
+				if self._itemFromPath(parentDir) is None:
 					raise ResourceNotFound(parentDir)
 			return _UploadOnClose(fs=self, path=path, parsedMode=parsedMode)
 
 	def remove(self, path):
+		if path == '/':
+			raise DirectoryNotEmpty(path=path)
 		_CheckPath(path)
 		with self._lock:
 			info(f"remove: {path}")
@@ -296,6 +322,8 @@ class GoogleDriveFS(FS):
 			self.drive.files().delete(fileId=metadata["id"]).execute()
 
 	def removedir(self, path):
+		if path == '/':
+			raise DirectoryNotEmpty(path=path)
 		_CheckPath(path)
 		with self._lock:
 			info(f"removedir: {path}")
@@ -309,6 +337,11 @@ class GoogleDriveFS(FS):
 				raise DirectoryNotEmpty(path=path)
 			self.drive.files().delete(fileId=metadata["id"]).execute()
 
+	def _generate_children(self, children, page):
+		if page:
+			return (self._infoFromMetadata(x) for x in children[page[0]:page[1]])
+		return (self._infoFromMetadata(x) for x in children)
+
 	# non-essential method - for speeding up walk
 	def scandir(self, path, namespaces=None, page=None):
 		_CheckPath(path)
@@ -317,9 +350,10 @@ class GoogleDriveFS(FS):
 			metadata = self._itemFromPath(path)
 			if metadata is None:
 				raise ResourceNotFound(path=path)
+			if type(metadata) is list: # root folder
+				children = self._childrenById(None)
+				return self._generate_children(children, page)
 			if metadata["mimeType"] != _folderMimeType:
 				raise DirectoryExpected(path=path)
 			children = self._childrenById(metadata["id"])
-			if page is not None:
-				return (self._infoFromMetadata(x) for x in children[page[0]:page[1]])
-			return (self._infoFromMetadata(x) for x in children)
+			return self._generate_children(children, page)
