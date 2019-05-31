@@ -195,6 +195,13 @@ class GoogleDriveFS(FS):
 		}
 		# there is also file-type-specific metadata like imageMediaMetadata
 		return Info(rawInfo)
+	
+	def isauthorized(self):
+		try:
+			self.drive.drives().list().execute()
+		except:
+			return False
+		return True
 
 	def getinfo(self, path, namespaces=None):  # pylint: disable=unused-argument
 		_CheckPath(path)
