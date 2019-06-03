@@ -1,4 +1,4 @@
-from json import load
+from json import load, loads
 from logging import info
 from os import environ
 from unittest import TestCase
@@ -10,8 +10,11 @@ from fs.googledrivefs import GoogleDriveFS
 from fs.test import FSTestCases
 
 def FullFS():
-	with open(environ["GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH"]) as f:
-		credentialsDict = load(f)
+	if "GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY" in environ:
+		credentialsDict = loads(environ["GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY"])
+	else:
+		with open(environ["GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH"]) as f:
+			credentialsDict = load(f)
 	credentials = Credentials(credentialsDict["access_token"],
 		refresh_token=credentialsDict["refresh_token"],
 		token_uri="https://www.googleapis.com/oauth2/v4/token",
