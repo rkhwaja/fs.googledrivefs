@@ -4,10 +4,9 @@ python:
 - "3.7"
 dist: xenial
 install:
-- pip install fs google-api-python-client google-auth pylint pytest pytest-rerunfailures python-coveralls coverage
+- pip install fs google-api-python-client google-auth pylint
 script:
 - pylint fs/googledrivefs/
 - pylint tests/
-- coverage run --source . -m pytest --reruns 5
 after_success:
 - coveralls

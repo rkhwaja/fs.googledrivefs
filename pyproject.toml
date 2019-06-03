@@ -21,7 +21,6 @@ google-auth = ">=1.5.1"
 pytest = "^3.10"
 requests-oauthlib = "^1.0"
 pyperclip = "^1.7"
-pytest-rerunfailures = "^7.0"
 pylint = "^2.3"
 
 [tool.poetry.plugins] # Optional super table
