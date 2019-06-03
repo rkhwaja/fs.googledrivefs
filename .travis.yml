@@ -8,6 +8,6 @@ install:
 script:
 - pylint fs/googledrivefs/
 - pylint tests/
-- coverage run --source . -m pytest
+- coverage run --source . -m pytest --reruns 5
 after_success:
 - coveralls
