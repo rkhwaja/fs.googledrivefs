@@ -26,11 +26,14 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 
 	def make_fs(self):
 		self.fullFS = FullFS()
-		self.testSubdir = f"/test-googledrivefs/{uuid4()}"
-		return self.fullFS.makedirs(self.testSubdir)
+		testRoot = "/test-googledrivefs"
+		uuidDir = str(uuid4())
+		self.testSubdir = f"{testRoot}/{uuidDir}"
+		return self.fullFS.opendir(testRoot).makedir(uuidDir)
 
 	def destroy_fs(self, fs):
-		self.fullFS.removetree(self.testSubdir)
+		pass
+		# self.fullFS.removetree(self.testSubdir)
 
 def testRoot(): # pylint: disable=no-self-use
 	fullFS = FullFS()
