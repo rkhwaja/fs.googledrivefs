@@ -9,6 +9,8 @@ from google.oauth2.credentials import Credentials
 from fs.googledrivefs import GoogleDriveFS
 from fs.test import FSTestCases
 
+_safeDirForTests = "/test-googledrivefs"
+
 def FullFS():
 	if "GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY" in environ:
 		credentialsDict = loads(environ["GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY"])
@@ -24,16 +26,21 @@ def FullFS():
 
 class TestGoogleDriveFS(FSTestCases, TestCase):
 
+	@classmethod
+	def setUpClass(cls):
+		cls._perRunDir = str(uuid4())
+		cls._perRunFS = FullFS().opendir(_safeDirForTests).makedir(cls._perRunDir)
+
+	@classmethod
+	def tearDownClass(cls):
+		FullFS().opendir(_safeDirForTests).removetree(cls._perRunDir)
+
 	def make_fs(self):
-		self.fullFS = FullFS()
-		testRoot = "/test-googledrivefs"
-		uuidDir = str(uuid4())
-		self.testSubdir = f"{testRoot}/{uuidDir}"
-		return self.fullFS.opendir(testRoot).makedir(uuidDir)
+		self._fullFS = self.__class__._perRunFS
+		return self.__class__._perRunFS.makedir(str(uuid4()))
 
 	def destroy_fs(self, fs):
 		pass
-		# self.fullFS.removetree(self.testSubdir)
 
 def testRoot(): # pylint: disable=no-self-use
 	fullFS = FullFS()
