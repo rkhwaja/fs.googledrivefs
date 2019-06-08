@@ -338,7 +338,8 @@ class GoogleDriveFS(FS):
 			return (self._infoFromMetadata(x) for x in children[page[0]:page[1]])
 		return (self._infoFromMetadata(x) for x in children)
 
-	# non-essential method - for speeding up walk
+	# Non-essential method - for speeding up walk
+	# Takes advantage of the fact that you get the full metadata for all children in one call
 	def scandir(self, path, namespaces=None, page=None):
 		_CheckPath(path)
 		with self._lock:
@@ -354,7 +355,9 @@ class GoogleDriveFS(FS):
 			children = self._childrenById(metadata["id"])
 			return self._generate_children(children, page)
 
+	# Non-essential - takes advantage of the file contents are already being on the server
 	def copy(self, src_path, dst_path, overwrite=False):
+		info(f"copy: {src_path} -> {dst_path}, {overwrite}")
 		_CheckPath(src_path)
 		_CheckPath(dst_path)
 		with self._lock:
@@ -377,6 +380,7 @@ class GoogleDriveFS(FS):
 			newMetadata = {"parents": [parentDirItem["id"]], "name": basename(dst_path)}
 			self.drive.files().copy(fileId=srcItem["id"], body=newMetadata).execute()
 
+	# Non-essential - takes advantage of the file contents already being on the server
 	def move(self, src_path, dst_path, overwrite=False):
 		info(f"move: {src_path} -> {dst_path}, {overwrite}")
 		_CheckPath(src_path)
@@ -399,9 +403,7 @@ class GoogleDriveFS(FS):
 				raise FileExpected(src_path)
 
 			dstParentDir = dirname(dst_path)
-			info(f"dstParentDir: {dstParentDir}")
 			dstParentDirItem = self._itemFromPath(dstParentDir)
-			info(f"dstParentDirItem: {dstParentDirItem}")
 
 			if dstParentDirItem is None:
 				raise ResourceNotFound(dstParentDir)
@@ -410,13 +412,8 @@ class GoogleDriveFS(FS):
 				assert overwrite is True
 				self.drive.files().delete(fileId=dstItem["id"]).execute()
 
-			newMetadata = {"name": basename(dst_path)
-				# ,"addParents": dstParentDirItem["id"]
-				# , "removeParents": srcParentItem["id"]
-				}
-
-			resp = self.drive.files().update(fileId=srcItem["id"]
-				, addParents=dstParentDirItem["id"]
-				, removeParents=srcParentItem["id"]
-				, body=newMetadata).execute()
-			info(f"resp: {resp}")
+			self.drive.files().update(
+				fileId=srcItem["id"],
+				addParents=dstParentDirItem["id"],
+				removeParents=srcParentItem["id"],
+				body={"name": basename(dst_path)}).execute()
