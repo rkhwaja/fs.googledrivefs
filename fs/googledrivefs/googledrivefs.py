@@ -376,3 +376,47 @@ class GoogleDriveFS(FS):
 
 			newMetadata = {"parents": [parentDirItem["id"]], "name": basename(dst_path)}
 			self.drive.files().copy(fileId=srcItem["id"], body=newMetadata).execute()
+
+	def move(self, src_path, dst_path, overwrite=False):
+		info(f"move: {src_path} -> {dst_path}, {overwrite}")
+		_CheckPath(src_path)
+		_CheckPath(dst_path)
+		with self._lock:
+			dstItem = self._itemFromPath(dst_path)
+			if overwrite is False and dstItem is not None:
+				raise DestinationExists(dst_path)
+
+			srcParentItem = self._itemFromPath(dirname(src_path))
+			if srcParentItem is None:
+				raise ResourceNotFound(src_path)
+
+			# TODO - it would be more efficient to go directly from srcParentItem to it's child here
+			srcItem = self._itemFromPath(src_path)
+			if srcItem is None:
+				raise ResourceNotFound(src_path)
+
+			if srcItem["mimeType"] == _folderMimeType:
+				raise FileExpected(src_path)
+
+			dstParentDir = dirname(dst_path)
+			info(f"dstParentDir: {dstParentDir}")
+			dstParentDirItem = self._itemFromPath(dstParentDir)
+			info(f"dstParentDirItem: {dstParentDirItem}")
+
+			if dstParentDirItem is None:
+				raise ResourceNotFound(dstParentDir)
+
+			if dstItem is not None:
+				assert overwrite is True
+				self.drive.files().delete(fileId=dstItem["id"]).execute()
+
+			newMetadata = {"name": basename(dst_path)
+				# ,"addParents": dstParentDirItem["id"]
+				# , "removeParents": srcParentItem["id"]
+				}
+
+			resp = self.drive.files().update(fileId=srcItem["id"]
+				, addParents=dstParentDirItem["id"]
+				, removeParents=srcParentItem["id"]
+				, body=newMetadata).execute()
+			info(f"resp: {resp}")
