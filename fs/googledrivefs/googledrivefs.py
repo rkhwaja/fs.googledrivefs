@@ -353,3 +353,26 @@ class GoogleDriveFS(FS):
 				raise DirectoryExpected(path=path)
 			children = self._childrenById(metadata["id"])
 			return self._generate_children(children, page)
+
+	def copy(self, src_path, dst_path, overwrite=False):
+		_CheckPath(src_path)
+		_CheckPath(dst_path)
+		with self._lock:
+			parentDir = dirname(dst_path)
+			parentDirItem = self._itemFromPath(parentDir)
+
+			if parentDirItem is None:
+				raise ResourceNotFound(parentDir)
+
+			if overwrite is False and self.exists(dst_path):
+				raise DestinationExists(dst_path)
+
+			srcItem = self._itemFromPath(src_path)
+			if srcItem is None:
+				raise ResourceNotFound(src_path)
+
+			if srcItem["mimeType"] == _folderMimeType:
+				raise FileExpected(src_path)
+
+			newMetadata = {"parents": [parentDirItem["id"]], "name": basename(dst_path)}
+			self.drive.files().copy(fileId=srcItem["id"], body=newMetadata).execute()
