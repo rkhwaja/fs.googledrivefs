@@ -11,7 +11,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseUpload
 from fs.base import FS
 from fs.enums import ResourceType
-from fs.errors import DirectoryExists, DirectoryExpected, DirectoryNotEmpty, FileExists, FileExpected, InvalidCharsInPath, NoURL, ResourceNotFound, OperationFailed, RemoveRootError
+from fs.errors import DestinationExists, DirectoryExists, DirectoryExpected, DirectoryNotEmpty, FileExists, FileExpected, InvalidCharsInPath, NoURL, ResourceNotFound, OperationFailed, RemoveRootError
 from fs.info import Info
 from fs.iotools import RawWrapper
 from fs.mode import Mode
