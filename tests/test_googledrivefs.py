@@ -30,6 +30,7 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 	@classmethod
 	def setUpClass(cls):
 		cls._perRunDir = str(uuid4())
+		info(f"Tests are running in {cls._perRunDir}")
 		cls.perRunFS = FullFS().opendir(_safeDirForTests).makedir(cls._perRunDir)
 
 	@classmethod
@@ -39,7 +40,9 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 
 	def make_fs(self):
 		self._fullFS = self.__class__.perRunFS
-		return self.__class__.perRunFS.makedir(str(uuid4()))
+		thisTestDir = str(uuid4())
+		info(f"Tests are running in {thisTestDir}")
+		return self.__class__.perRunFS.makedir(thisTestDir)
 
 	def destroy_fs(self, fs):
 		pass
