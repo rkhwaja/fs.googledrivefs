@@ -1,3 +1,4 @@
+from contextlib import suppress
 from json import load, loads
 from logging import info
 from os import environ
@@ -33,7 +34,8 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 
 	@classmethod
 	def tearDownClass(cls):
-		FullFS().opendir(_safeDirForTests).removetree(cls._perRunDir)
+		with suppress(Exception):
+			FullFS().opendir(_safeDirForTests).removetree(cls._perRunDir)
 
 	def make_fs(self):
 		self._fullFS = self.__class__.perRunFS
