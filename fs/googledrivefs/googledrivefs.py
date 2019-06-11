@@ -38,12 +38,12 @@ def _CheckPath(path):
 
 # TODO - switch to MediaIoBaseUpload and use BytesIO
 class _UploadOnClose(RawWrapper):
-	def __init__(self, fs, path, parsedMode):
+	def __init__(self, fs, path, thisMetadata, parentMetadata, parsedMode): # pylint: disable=too-many-arguments
 		self.fs = fs
 		self.path = path
-		self.parentMetadata = self.fs._itemFromPath(dirname(self.path))  # pylint: disable=protected-access
+		self.parentMetadata = parentMetadata
 		# None here means we'll have to create a new file later
-		self.thisMetadata = self.fs._itemFromPath(self.path)  # pylint: disable=protected-access
+		self.thisMetadata = thisMetadata
 		# keeping a parsed mode separate from the base class's mode member
 		self.parsedMode = parsedMode
 		fileHandle, self.localPath = mkstemp(prefix="pyfilesystem-googledrive-", suffix=splitext(self.path)[1],
@@ -159,6 +159,23 @@ class GoogleDriveFS(FS):
 		result = self._fileQuery(query)
 		return result["files"]
 
+	def _itemsFromPath(self, path):
+		pathIdMap = {}
+		ipath = iteratepath(path)
+		if not ipath:
+			return {"/": self._childrenById(None)} # querying root folder. will return a list, not dict
+
+		pathSoFar = ""
+		parentId = None
+		for childName in ipath:
+			pathSoFar = f"{pathSoFar}/{childName}"
+			metadata = self._childByName(parentId, childName)
+			if metadata is None:
+				break
+			pathIdMap[pathSoFar] = metadata
+			parentId = metadata["id"] # pylint: disable=unsubscriptable-object
+		return pathIdMap
+
 	def _itemFromPath(self, path):
 		metadata = None
 		ipath = iteratepath(path)
@@ -258,10 +275,10 @@ class GoogleDriveFS(FS):
 		with self._lock:
 			return [x.name for x in self.scandir(path)]
 
-	def _create_subdirectory(self, name, parents=None):
+	def _create_subdirectory(self, name, path, parents):
 		newMetadata = {"name": basename(name), "parents": parents, "mimeType": _folderMimeType}
 		self.drive.files().create(body=newMetadata, fields="id").execute()
-		return SubFS(self, name)
+		return SubFS(self, path)
 
 	def makedir(self, path, permissions=None, recreate=False):
 		_CheckPath(path)
@@ -271,38 +288,39 @@ class GoogleDriveFS(FS):
 
 			if isinstance(parentMetadata, list): # adding new folder to root folder
 				if not self._childByName(None, path):
-					return self._create_subdirectory(path)
+					return self._create_subdirectory(path, path, None)
 				raise DirectoryExists(path=path)
 
 			if parentMetadata is None:
 				raise ResourceNotFound(path=path)
+
 			childMetadata = self._childByName(parentMetadata["id"], basename(path))
 			if childMetadata is not None:
 				if recreate is False:
 					raise DirectoryExists(path=path)
 				return SubFS(self, path)
-			newMetadata = {"name": basename(path), "parents": [parentMetadata["id"]], "mimeType": _folderMimeType}
-			_ = self.drive.files().create(body=newMetadata, fields="id").execute()
-			return SubFS(self, path)
+
+			return self._create_subdirectory(basename(path), path, [parentMetadata["id"]])
 
 	def openbin(self, path, mode="r", buffering=-1, **options):  # pylint: disable=unused-argument
 		_CheckPath(path)
 		with self._lock:
 			info(f"openbin: {path}, {mode}, {buffering}")
 			parsedMode = Mode(mode)
-			exists = self.exists(path)
-			if parsedMode.exclusive and exists:
+			pathIdMap = self._itemsFromPath(path)
+			item = pathIdMap.get(path, None)
+			if parsedMode.exclusive and item is not None:
 				raise FileExists(path)
-			if parsedMode.reading and not parsedMode.create and not exists:
+			if parsedMode.reading and not parsedMode.create and item is None:
 				raise ResourceNotFound(path)
-			if self.isdir(path):
+			if item is not None and item["mimeType"] == _folderMimeType:
 				raise FileExpected(path)
-			if parsedMode.writing:
-				# make sure that the parent directory exists
-				parentDir = dirname(path)
-				if self._itemFromPath(parentDir) is None:
-					raise ResourceNotFound(parentDir)
-			return _UploadOnClose(fs=self, path=path, parsedMode=parsedMode)
+			parentDir = dirname(path)
+			parentDirItem = pathIdMap.get(parentDir, None)
+			# make sure that the parent directory exists if we're writing
+			if parsedMode.writing and parentDirItem is None:
+				raise ResourceNotFound(parentDir)
+			return _UploadOnClose(fs=self, path=path, thisMetadata=item, parentMetadata=parentDirItem, parsedMode=parsedMode)
 
 	def remove(self, path):
 		if path == '/':
@@ -367,7 +385,8 @@ class GoogleDriveFS(FS):
 			if parentDirItem is None:
 				raise ResourceNotFound(parentDir)
 
-			if overwrite is False and self.exists(dst_path):
+			dstItem = self._itemFromPath(dst_path)
+			if overwrite is False and dstItem is not None:
 				raise DestinationExists(dst_path)
 
 			srcItem = self._itemFromPath(src_path)
@@ -376,6 +395,10 @@ class GoogleDriveFS(FS):
 
 			if srcItem["mimeType"] == _folderMimeType:
 				raise FileExpected(src_path)
+
+			# TODO - we should really replace the contents of the existing file with the new contents, so that the history is correct
+			if dstItem is not None:
+				self.drive.files().delete(fileId=dstItem["id"]).execute()
 
 			newMetadata = {"parents": [parentDirItem["id"]], "name": basename(dst_path)}
 			self.drive.files().copy(fileId=srcItem["id"], body=newMetadata).execute()

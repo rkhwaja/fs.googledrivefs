@@ -40,12 +40,12 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 
 	def make_fs(self):
 		self._fullFS = self.__class__.perRunFS
-		thisTestDir = str(uuid4())
-		info(f"Tests are running in {thisTestDir}")
-		return self.__class__.perRunFS.makedir(thisTestDir)
+		self._thisTestDir = str(uuid4())
+		info(f"Tests are running in {self._thisTestDir}")
+		return self.__class__.perRunFS.makedir(self._thisTestDir)
 
 	def destroy_fs(self, fs):
-		pass
+		self.__class__.perRunFS.removetree(self._thisTestDir)
 
 def testRoot(): # pylint: disable=no-self-use
 	fullFS = FullFS()
