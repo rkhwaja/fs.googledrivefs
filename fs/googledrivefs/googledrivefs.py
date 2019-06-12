@@ -134,7 +134,7 @@ class GoogleDriveFS(FS):
 
 	def _fileQuery(self, query):
 		allFields = "files(id,mimeType,kind,name,createdTime,modifiedTime,size,permissions)"
-		return self.drive.files().list(q=query, fields=allFields).execute()
+		return self.drive.files().list(q=query, fields=allFields, pageSize=1000).execute()
 
 	def _childByName(self, parentId, childName):
 		# this "name=" clause seems to be case-insensitive, which means it's easier to model this
