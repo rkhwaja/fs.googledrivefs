@@ -133,7 +133,7 @@ class GoogleDriveFS(FS):
 		return "<GoogleDriveFS>"
 
 	def _fileQuery(self, query):
-		allFields = "files(id,mimeType,kind,name,createdTime,modifiedTime,size,permissions)"
+		allFields = "nextPageToken,files(id,mimeType,kind,name,createdTime,modifiedTime,size,permissions)"
 		response = self.drive.files().list(q=query, fields=allFields).execute()
 		result = response["files"]
 		while "nextPageToken" in response:
