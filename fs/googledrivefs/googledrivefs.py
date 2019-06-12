@@ -134,7 +134,12 @@ class GoogleDriveFS(FS):
 
 	def _fileQuery(self, query):
 		allFields = "files(id,mimeType,kind,name,createdTime,modifiedTime,size,permissions)"
-		return self.drive.files().list(q=query, fields=allFields, pageSize=1000).execute()
+		response = self.drive.files().list(q=query, fields=allFields).execute()
+		result = response["files"]
+		while "nextPageToken" in response:
+			response = self.drive.files().list(q=query, fields=allFields, pageToken=response["nextPageToken"]).execute()
+			result.extend(response["files"])
+		return result
 
 	def _childByName(self, parentId, childName):
 		# this "name=" clause seems to be case-insensitive, which means it's easier to model this
@@ -144,20 +149,19 @@ class GoogleDriveFS(FS):
 			# Google drive seems to somehow distinguish it's real root folder from folder named "root" in root folder.
 		query = f"trashed=False and name='{_Escape(childName)}' and '{parentId}' in parents"
 		result = self._fileQuery(query)
-		if len(result["files"]) not in [0, 1]:
+		if len(result) not in [0, 1]:
 			# Google drive doesn't follow the model of a filesystem, really
 			# but since most people will set it up to follow the model, we'll carry on regardless
 			# and just throw an error when it becomes a problem
 			raise RuntimeError(f"Folder with id {parentId} has more than 1 child with name {childName}")
-		return result["files"][0] if result["files"] else None
+		return result[0] if len(result) == 1 else None
 
 	def _childrenById(self, parentId):
 		if not parentId:
 			parentId = 'root'
 			# Google drive seems to somehow distinguish it's real root folder from folder named "root" in root folder.
 		query = f"trashed=False and '{parentId}' in parents"
-		result = self._fileQuery(query)
-		return result["files"]
+		return self._fileQuery(query)
 
 	def _itemsFromPath(self, path):
 		pathIdMap = {}
