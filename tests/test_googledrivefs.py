@@ -47,6 +47,14 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 	def destroy_fs(self, fs):
 		self.__class__.perRunFS.removetree(self._thisTestDir)
 
+	def test_directory_paging(self):
+		# default page size is 100
+		fileCount = 101
+		for i in range(fileCount):
+			self.fs.writebytes(str(i), b"x")
+		files = self.fs.listdir("/")
+		self.assertEqual(len(files), fileCount)
+
 def testRoot(): # pylint: disable=no-self-use
 	fullFS = FullFS()
 	info(fullFS.listdir("/"))
