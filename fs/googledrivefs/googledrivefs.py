@@ -53,7 +53,7 @@ class _UploadOnClose(RawWrapper):
 
 		if (self.parsedMode.reading or self.parsedMode.appending) and not self.parsedMode.truncate:
 			if self.thisMetadata is not None:
-				initialData = self.fs.drive.files().get_media(fileId=self.thisMetadata["id"]).execute()
+				initialData = self.fs.drive.files().get_media(fileId=self.thisMetadata["id"]).execute(num_retries=self.fs.retryCount)
 				debug(f"Read initial data: {initialData}")
 				with open(self.localPath, "wb") as f:
 					f.write(initialData)
@@ -101,13 +101,13 @@ class _UploadOnClose(RawWrapper):
 						{"name": basename(self.path), "parents": [self.parentMetadata["id"]], "createdTime": now})
 					createdFile = self.fs.drive.files().create(
 						body=onlineMetadata,
-						media_body=media).execute()
+						media_body=media).execute(num_retries=self.fs.retryCount)
 					debug(f"Created empty file: {createdFile}")
 				else:
 					updatedFile = self.fs.drive.files().update(
 						fileId=self.thisMetadata["id"],
 						body={},
-						media_body=media).execute()
+						media_body=media).execute(num_retries=self.fs.retryCount)
 					debug(f"Updated file to empty: {updatedFile}")
 		remove(self.localPath)
 
@@ -117,6 +117,7 @@ class GoogleDriveFS(FS):
 		super().__init__()
 
 		self.drive = build("drive", "v3", credentials=credentials, cache_discovery=False)
+		self.retryCount = 3
 
 		_meta = self._meta = {
 			"case_insensitive": True,
@@ -134,10 +135,10 @@ class GoogleDriveFS(FS):
 
 	def _fileQuery(self, query):
 		allFields = "nextPageToken,files(id,mimeType,kind,name,createdTime,modifiedTime,size,permissions)"
-		response = self.drive.files().list(q=query, fields=allFields).execute()
+		response = self.drive.files().list(q=query, fields=allFields).execute(num_retries=self.retryCount)
 		result = response["files"]
 		while "nextPageToken" in response:
-			response = self.drive.files().list(q=query, fields=allFields, pageToken=response["nextPageToken"]).execute()
+			response = self.drive.files().list(q=query, fields=allFields, pageToken=response["nextPageToken"]).execute(num_retries=self.retryCount)
 			result.extend(response["files"])
 		return result
 
@@ -251,7 +252,7 @@ class GoogleDriveFS(FS):
 				permissions = {'role': role, 'type': 'user', 'emailAddress': email}
 			else:
 				permissions = {'role': role, 'type': 'anyone'}
-			self.drive.permissions().create(fileId=metadata['id'], body=permissions).execute()
+			self.drive.permissions().create(fileId=metadata['id'], body=permissions).execute(num_retries=self.retryCount)
 			return self.geturl(path)
 
 	def hasurl(self, path, purpose="download"):
@@ -281,7 +282,7 @@ class GoogleDriveFS(FS):
 
 	def _create_subdirectory(self, name, path, parents):
 		newMetadata = {"name": basename(name), "parents": parents, "mimeType": _folderMimeType}
-		self.drive.files().create(body=newMetadata, fields="id").execute()
+		self.drive.files().create(body=newMetadata, fields="id").execute(num_retries=self.retryCount)
 		return SubFS(self, path)
 
 	def makedir(self, path, permissions=None, recreate=False):
@@ -337,7 +338,7 @@ class GoogleDriveFS(FS):
 				raise ResourceNotFound(path=path)
 			if metadata["mimeType"] == _folderMimeType:
 				raise FileExpected(path=path)
-			self.drive.files().delete(fileId=metadata["id"]).execute()
+			self.drive.files().delete(fileId=metadata["id"]).execute(num_retries=self.retryCount)
 
 	def removedir(self, path):
 		if path == '/':
@@ -353,7 +354,7 @@ class GoogleDriveFS(FS):
 			children = self._childrenById(metadata["id"])
 			if len(children) > 0:
 				raise DirectoryNotEmpty(path=path)
-			self.drive.files().delete(fileId=metadata["id"]).execute()
+			self.drive.files().delete(fileId=metadata["id"]).execute(num_retries=self.retryCount)
 
 	def _generate_children(self, children, page):
 		if page:
@@ -402,10 +403,10 @@ class GoogleDriveFS(FS):
 
 			# TODO - we should really replace the contents of the existing file with the new contents, so that the history is correct
 			if dstItem is not None:
-				self.drive.files().delete(fileId=dstItem["id"]).execute()
+				self.drive.files().delete(fileId=dstItem["id"]).execute(num_retries=self.retryCount)
 
 			newMetadata = {"parents": [parentDirItem["id"]], "name": basename(dst_path)}
-			self.drive.files().copy(fileId=srcItem["id"], body=newMetadata).execute()
+			self.drive.files().copy(fileId=srcItem["id"], body=newMetadata).execute(num_retries=self.retryCount)
 
 	# Non-essential - takes advantage of the file contents already being on the server
 	def move(self, src_path, dst_path, overwrite=False):
@@ -437,10 +438,10 @@ class GoogleDriveFS(FS):
 
 			if dstItem is not None:
 				assert overwrite is True
-				self.drive.files().delete(fileId=dstItem["id"]).execute()
+				self.drive.files().delete(fileId=dstItem["id"]).execute(num_retries=self.retryCount)
 
 			self.drive.files().update(
 				fileId=srcItem["id"],
 				addParents=dstParentDirItem["id"],
 				removeParents=srcParentItem["id"],
-				body={"name": basename(dst_path)}).execute()
+				body={"name": basename(dst_path)}).execute(num_retries=self.retryCount)
