@@ -36,7 +36,7 @@ Then generate the credentials json file by running
 
 .. code-block:: bash
 
-  python generate-credentials.py
+  python tests/generate-credentials.py
 
 Then run the tests by executing
 
