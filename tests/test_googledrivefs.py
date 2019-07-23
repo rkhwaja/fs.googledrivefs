@@ -1,4 +1,3 @@
-from contextlib import suppress
 from json import load, loads
 from logging import info
 from os import environ
@@ -7,7 +6,8 @@ from uuid import uuid4
 
 from google.oauth2.credentials import Credentials
 
-from fs.googledrivefs import GoogleDriveFS
+from fs.errors import DirectoryExpected, FileExists, ResourceNotFound
+from fs.googledrivefs import GoogleDriveFS, SubGoogleDriveFS
 from fs.test import FSTestCases
 
 _safeDirForTests = "/test-googledrivefs"
@@ -26,26 +26,14 @@ def FullFS():
 	return GoogleDriveFS(credentials)
 
 class TestGoogleDriveFS(FSTestCases, TestCase):
-
-	@classmethod
-	def setUpClass(cls):
-		cls._perRunDir = str(uuid4())
-		info(f"Tests are running in {cls._perRunDir}")
-		cls.perRunFS = FullFS().opendir(_safeDirForTests).makedir(cls._perRunDir)
-
-	@classmethod
-	def tearDownClass(cls):
-		with suppress(Exception):
-			FullFS().opendir(_safeDirForTests).removetree(cls._perRunDir)
-
 	def make_fs(self):
-		self._fullFS = self.__class__.perRunFS
-		self._thisTestDir = str(uuid4())
-		info(f"Tests are running in {self._thisTestDir}")
-		return self.__class__.perRunFS.makedir(self._thisTestDir)
+		self.fullFS = FullFS()
+		self.testSubdir = f"{_safeDirForTests}/{uuid4()}"
+		_ = self.fullFS.makedirs(self.testSubdir)
+		return self.fullFS.opendir(self.testSubdir, factory=SubGoogleDriveFS)
 
-	def destroy_fs(self, fs):
-		self.__class__.perRunFS.removetree(self._thisTestDir)
+	def destroy_fs(self, _):
+		self.fullFS.removetree(self.testSubdir)
 
 	def test_directory_paging(self):
 		# default page size is 100
@@ -55,6 +43,42 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 		files = self.fs.listdir("/")
 		self.assertEqual(len(files), fileCount)
 
-def testRoot(): # pylint: disable=no-self-use
+	def test_add_remove_parents(self):
+		self.fs.makedir("parent1")
+		self.fs.makedir("parent2")
+		self.fs.makedir("parent3")
+		self.fs.writebytes("parent1/file", b"data1")
+		self.fs.writebytes("parent2/file", b"data2")
+
+		# can't link into a parent where there's already a file there
+		with self.assertRaises(FileExists):
+			self.fs.add_parent("parent1/file", "parent2")
+
+		# can't add a parent which is a file
+		with self.assertRaises(DirectoryExpected):
+			self.fs.add_parent("parent1/file", "parent2/file")
+
+		# can't add a parent which doesn't exist
+		with self.assertRaises(ResourceNotFound):
+			self.fs.add_parent("parent1/file2", "parent4")
+
+		# can't add a parent to a file that doesn't exist
+		with self.assertRaises(ResourceNotFound):
+			self.fs.add_parent("parent1/file2", "parent3")
+
+		# when linking works, the data is the same
+		self.fs.add_parent("parent1/file", "parent3")
+		self.assert_bytes("parent3/file", b"data1")
+
+		# can't remove a parent from a file that doesn't exist
+		with self.assertRaises(ResourceNotFound):
+			self.fs.remove_parent("parent1/file2")
+
+		# successful remove_parent call removes one file and leaves the other the same
+		self.fs.remove_parent("parent1/file")
+		self.assert_not_exists("parent1/file")
+		self.assert_bytes("parent3/file", b"data1")
+
+def test_root(): # pylint: disable=no-self-use
 	fullFS = FullFS()
 	info(fullFS.listdir("/"))

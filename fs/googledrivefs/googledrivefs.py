@@ -15,7 +15,7 @@ from fs.errors import DestinationExists, DirectoryExists, DirectoryExpected, Dir
 from fs.info import Info
 from fs.iotools import RawWrapper
 from fs.mode import Mode
-from fs.path import basename, dirname, iteratepath
+from fs.path import abspath, basename, dirname, iteratepath, join
 from fs.subfs import SubFS
 from fs.time import datetime_to_epoch
 
@@ -29,12 +29,21 @@ def _Escape(name):
 	name = name.replace("'", r"\'")
 	return name
 
-
 def _CheckPath(path):
 	for char in _INVALID_PATH_CHARS:
 		if char in path:
 			raise InvalidCharsInPath(path)
 
+def _IdFromPath(path, pathIdMap):
+	# if path[0] == "/":
+	# 	path2 = path[1:]
+	# result = pathIdMap.get(path, pathIdMap.get(path2, None))
+	result = pathIdMap.get(abspath(path), None)
+	if result is None:
+		info(f"Looking up {path}")
+		from pprint import pformat
+		info(f"Not found in {pformat(list(pathIdMap.keys()))}")
+	return result
 
 # TODO - switch to MediaIoBaseUpload and use BytesIO
 class _UploadOnClose(RawWrapper):
@@ -111,6 +120,15 @@ class _UploadOnClose(RawWrapper):
 					debug(f"Updated file to empty: {updatedFile}")
 		remove(self.localPath)
 
+class SubGoogleDriveFS(SubFS):
+	def add_parent(self, path, parent_dir):
+		fs, delegatePath = self.delegate_path(path)
+		fs, delegateParentDir = self.delegate_path(parent_dir)
+		fs.add_parent(delegatePath, delegateParentDir)
+
+	def remove_parent(self, path):
+		fs, delegatePath = self.delegate_path(path)
+		fs.remove_parent(delegatePath)
 
 class GoogleDriveFS(FS):
 	def __init__(self, credentials):
@@ -179,7 +197,9 @@ class GoogleDriveFS(FS):
 				break
 			pathIdMap[pathSoFar] = metadata
 			parentId = metadata["id"] # pylint: disable=unsubscriptable-object
-		return pathIdMap
+		# from pprint import pformat
+		# info(f"{path} ->\n{pformat(list(pathIdMap.keys()))}")
+		return lambda path_: _IdFromPath(path_, pathIdMap)
 
 	def _itemFromPath(self, path):
 		metadata = None
@@ -312,8 +332,8 @@ class GoogleDriveFS(FS):
 		with self._lock:
 			info(f"openbin: {path}, {mode}, {buffering}")
 			parsedMode = Mode(mode)
-			pathIdMap = self._itemsFromPath(path)
-			item = pathIdMap.get(path, None)
+			IdFromPath = self._itemsFromPath(path)
+			item = IdFromPath(path)
 			if parsedMode.exclusive and item is not None:
 				raise FileExists(path)
 			if parsedMode.reading and not parsedMode.create and item is None:
@@ -321,7 +341,8 @@ class GoogleDriveFS(FS):
 			if item is not None and item["mimeType"] == _folderMimeType:
 				raise FileExpected(path)
 			parentDir = dirname(path)
-			parentDirItem = pathIdMap.get(parentDir, None)
+			debug(f"looking up id for {parentDir}")
+			parentDirItem = IdFromPath(parentDir)
 			# make sure that the parent directory exists if we're writing
 			if parsedMode.writing and parentDirItem is None:
 				raise ResourceNotFound(parentDir)
@@ -445,3 +466,44 @@ class GoogleDriveFS(FS):
 				addParents=dstParentDirItem["id"],
 				removeParents=srcParentItem["id"],
 				body={"name": basename(dst_path)}).execute(num_retries=self.retryCount)
+
+	def add_parent(self, path, parent_dir):
+		info(f"add_parent: {path} -> {parent_dir}")
+		_CheckPath(path)
+		_CheckPath(parent_dir)
+		with self._lock:
+			targetPath = join(parent_dir, basename(path))
+			IdFromPath = self._itemsFromPath(targetPath)
+
+			# don't allow violation of our requirement to keep filename unique inside new directory
+			if IdFromPath(targetPath) is not None:
+				raise FileExists(targetPath)
+
+			parentDirItem = IdFromPath(parent_dir)
+			if parentDirItem is None:
+				raise ResourceNotFound(parent_dir)
+
+			if parentDirItem["mimeType"] != _folderMimeType:
+				raise DirectoryExpected(parent_dir)
+
+			sourceItem = self._itemFromPath(path)
+			if sourceItem is None:
+				raise ResourceNotFound(path)
+
+			self.drive.files().update(
+				fileId=sourceItem["id"],
+				addParents=parentDirItem["id"],
+				body={}).execute(num_retries=self.retryCount)
+
+	def remove_parent(self, path):
+		info(f"remove_parent: {path}")
+		_CheckPath(path)
+		with self._lock:
+			IdFromPath = self._itemsFromPath(path)
+			sourceItem = IdFromPath(path)
+			if sourceItem is None:
+				raise ResourceNotFound(path)
+			self.drive.files().update(
+				fileId=sourceItem["id"],
+				removeParents=IdFromPath(dirname(path))["id"],
+				body={}).execute(num_retries=self.retryCount)
