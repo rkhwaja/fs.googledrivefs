@@ -7,6 +7,7 @@ poetry.lock
 .venv
 *.egg-info
 pip-wheel-metadata
+requirements.txt
 
 # MacOS
 .DS_Store

@@ -1,9 +1,14 @@
 language: python
 python:
+- "3.6"
 - "3.7"
 dist: xenial
 install:
-- pip install fs google-api-python-client google-auth pylint pytest python-coveralls coverage
+- pip install --upgrade --pre poetry
+- mkdir -p ~/.config/pypoetry
+- poetry config settings.virtualenvs.create false
+- poetry export --dev --format requirements.txt
+- pip install -r requirements.txt
 script:
 - pylint fs/googledrivefs/
 - pylint tests/

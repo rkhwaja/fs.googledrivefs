@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "fs.googledrivefs"
 packages = [
-    { include = "fs/googledrivefs/*.py"}
+    { include = "fs/googledrivefs"}
 ]
 version = "1.1.0"
 description = "Pyfilesystem2 implementation for Google Drive"
