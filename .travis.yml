@@ -5,11 +5,9 @@ python:
 - "3.8"
 dist: xenial
 install:
-- pip install --upgrade --pre poetry
-- mkdir -p ~/.config/pypoetry
+- pip install poetry
 - poetry config settings.virtualenvs.create false
-- poetry export --dev --format requirements.txt
-- pip install -r requirements.txt
+- poetry install
 script:
 - pylint fs/googledrivefs/
 - pylint tests/
