@@ -6,7 +6,7 @@ python:
 dist: xenial
 install:
 - pip install --pre poetry
-- poetry config settings.virtualenvs.create false
+- poetry config virtualenvs.create false
 - poetry install
 script:
 - pylint fs/googledrivefs/
