@@ -5,6 +5,7 @@ from io import BytesIO, SEEK_END
 from logging import debug, info
 from os import close, remove
 from os.path import splitext
+from pprint import pformat
 from tempfile import mkstemp
 
 from googleapiclient.discovery import build
@@ -41,7 +42,6 @@ def _IdFromPath(path, pathIdMap):
 	result = pathIdMap.get(abspath(path), None)
 	if result is None:
 		info(f"Looking up {path}")
-		from pprint import pformat
 		info(f"Not found in {pformat(list(pathIdMap.keys()))}")
 	return result
 
