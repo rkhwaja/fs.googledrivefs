@@ -1,5 +1,5 @@
 from json import load, loads
-from logging import info
+from logging import getLogger
 from os import environ
 from unittest import TestCase
 from uuid import uuid4
@@ -81,4 +81,4 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 
 def test_root(): # pylint: disable=no-self-use
 	fullFS = FullFS()
-	info(fullFS.listdir("/"))
+	getLogger("fs.googledrivefs").info(fullFS.listdir("/"))

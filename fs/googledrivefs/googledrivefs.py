@@ -2,7 +2,7 @@ from __future__ import absolute_import
 
 from datetime import datetime
 from io import BytesIO, SEEK_END
-from logging import debug, info
+from logging import getLogger
 from os import close, remove
 from os.path import splitext
 from pprint import pformat
@@ -24,6 +24,13 @@ _fileMimeType = "application/vnd.google-apps.file"
 _folderMimeType = "application/vnd.google-apps.folder"
 _sharingUrl = "https://drive.google.com/open?id="
 _INVALID_PATH_CHARS = ":\0"
+_log = getLogger("fs.googledrivefs")
+
+def debug(toLog):
+	_log.debug(toLog)
+
+def info(toLog):
+	_log.info(toLog)
 
 def _Escape(name):
 	name = name.replace("\\", "\\\\")
