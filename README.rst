@@ -27,15 +27,15 @@ Running tests
 
 To run the tests, set the following environment variables:
 
-GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH - path to a json file which will contain the credentials
-GOOGLEDRIVEFS_TEST_CLIENT_ID - your client id (see Google Developer Console)
-GOOGLEDRIVEFS_TEST_CLIENT_SECRET - your client secret (see Google Developer Console)
+- GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH - path to a json file which will contain the credentials
+- GOOGLEDRIVEFS_TEST_CLIENT_ID - your client id (see Google Developer Console)
+- GOOGLEDRIVEFS_TEST_CLIENT_SECRET - your client secret (see Google Developer Console)
 
 Then generate the credentials json file by running
 
 .. code-block:: bash
 
-  python tests/generate-credentials.py
+  python generate-credentials.py
 
 Then run the tests by executing
 

@@ -7,17 +7,20 @@ from uuid import uuid4
 from google.oauth2.credentials import Credentials
 
 from fs.errors import DirectoryExpected, FileExists, ResourceNotFound
-from fs.googledrivefs import GoogleDriveFS, SubGoogleDriveFS
+from fs.googledrivefs import GoogleDriveFS, GoogleDriveFSOpener, SubGoogleDriveFS
+from fs.opener import open_fs, registry
 from fs.test import FSTestCases
 
 _safeDirForTests = "/test-googledrivefs"
 
-def FullFS():
+def CredentialsDict():
 	if "GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY" in environ:
-		credentialsDict = loads(environ["GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY"])
-	else:
-		with open(environ["GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH"]) as f:
-			credentialsDict = load(f)
+		return loads(environ["GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY"])
+	with open(environ["GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH"]) as f:
+		return load(f)
+
+def FullFS():
+	credentialsDict = CredentialsDict()
 	credentials = Credentials(credentialsDict["access_token"],
 		refresh_token=credentialsDict["refresh_token"],
 		token_uri="https://www.googleapis.com/oauth2/v4/token",
@@ -82,3 +85,21 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 def test_root(): # pylint: disable=no-self-use
 	fullFS = FullFS()
 	getLogger("fs.googledrivefs").info(fullFS.listdir("/"))
+
+def test_opener():
+	registry.install(GoogleDriveFSOpener())
+	client_id = environ["GOOGLEDRIVEFS_TEST_CLIENT_ID"]
+	client_secret = environ["GOOGLEDRIVEFS_TEST_CLIENT_SECRET"]
+	credentialsDict = CredentialsDict()
+	access_token = credentialsDict["access_token"]
+	refresh_token = credentialsDict["refresh_token"]
+
+	# Without the initial "/" character, it should still be assumed to relative to the root
+	fs = open_fs(f"googledrive://test-googledrivefs?access_token={access_token}&refresh_token={refresh_token}&client_id={client_id}&client_secret={client_secret}")
+	assert isinstance(fs, SubGoogleDriveFS), str(fs)
+	assert fs._sub_dir == "/test-googledrivefs" # pylint: disable=protected-access
+
+	# It should still accept the initial "/" character
+	fs = open_fs(f"googledrive:///test-googledrivefs?access_token={access_token}&refresh_token={refresh_token}&client_id={client_id}&client_secret={client_secret}")
+	assert isinstance(fs, SubGoogleDriveFS), str(fs)
+	assert fs._sub_dir == "/test-googledrivefs" # pylint: disable=protected-access

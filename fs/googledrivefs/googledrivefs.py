@@ -26,12 +26,6 @@ _sharingUrl = "https://drive.google.com/open?id="
 _INVALID_PATH_CHARS = ":\0"
 _log = getLogger("fs.googledrivefs")
 
-def debug(toLog):
-	_log.debug(toLog)
-
-def info(toLog):
-	_log.info(toLog)
-
 def _Escape(name):
 	name = name.replace("\\", "\\\\")
 	name = name.replace("'", r"\'")
@@ -48,8 +42,8 @@ def _IdFromPath(path, pathIdMap):
 	# result = pathIdMap.get(path, pathIdMap.get(path2, None))
 	result = pathIdMap.get(abspath(path), None)
 	if result is None:
-		info(f"Looking up {path}")
-		info(f"Not found in {pformat(list(pathIdMap.keys()))}")
+		_log.info(f"Looking up {path}")
+		_log.info(f"Not found in {pformat(list(pathIdMap.keys()))}")
 	return result
 
 # TODO - switch to MediaIoBaseUpload and use BytesIO
@@ -65,12 +59,12 @@ class _UploadOnClose(RawWrapper):
 		fileHandle, self.localPath = mkstemp(prefix="pyfilesystem-googledrive-", suffix=splitext(self.path)[1],
 											 text=False)
 		close(fileHandle)
-		debug(f"self.localPath: {self.localPath}")
+		_log.debug(f"self.localPath: {self.localPath}")
 
 		if (self.parsedMode.reading or self.parsedMode.appending) and not self.parsedMode.truncate:
 			if self.thisMetadata is not None:
 				initialData = self.fs.drive.files().get_media(fileId=self.thisMetadata["id"]).execute(num_retries=self.fs.retryCount)
-				debug(f"Read initial data: {initialData}")
+				_log.debug(f"Read initial data: {initialData}")
 				with open(self.localPath, "wb") as f:
 					f.write(initialData)
 		platformMode = self.parsedMode.to_platform()
@@ -90,23 +84,23 @@ class _UploadOnClose(RawWrapper):
 
 			with open(self.localPath, "rb") as f:
 				dataToWrite = f.read()
-			debug(f"About to upload data: {dataToWrite}")
+			_log.debug(f"About to upload data: {dataToWrite}")
 
 			if len(dataToWrite) > 0:
 				upload = MediaFileUpload(self.localPath, resumable=True)
 				if self.thisMetadata is None:
-					debug("Creating new file")
+					_log.debug("Creating new file")
 					onlineMetadata.update(
 						{"name": basename(self.path), "parents": [self.parentMetadata["id"]], "createdTime": now})
 					request = self.fs.drive.files().create(body=onlineMetadata, media_body=upload)
 				else:
-					debug("Updating existing file")
+					_log.debug("Updating existing file")
 					request = self.fs.drive.files().update(fileId=self.thisMetadata["id"], body={}, media_body=upload)
 
 				response = None
 				while response is None:
 					status, response = request.next_chunk()
-					debug(f"{status}: {response}")
+					_log.debug(f"{status}: {response}")
 				# MediaFileUpload doesn't close it's file handle, so we have to workaround it (https://github.com/googleapis/google-api-python-client/issues/575)
 				upload._fd.close()  # pylint: disable=protected-access
 			else:
@@ -118,16 +112,19 @@ class _UploadOnClose(RawWrapper):
 					createdFile = self.fs.drive.files().create(
 						body=onlineMetadata,
 						media_body=media).execute(num_retries=self.fs.retryCount)
-					debug(f"Created empty file: {createdFile}")
+					_log.debug(f"Created empty file: {createdFile}")
 				else:
 					updatedFile = self.fs.drive.files().update(
 						fileId=self.thisMetadata["id"],
 						body={},
 						media_body=media).execute(num_retries=self.fs.retryCount)
-					debug(f"Updated file to empty: {updatedFile}")
+					_log.debug(f"Updated file to empty: {updatedFile}")
 		remove(self.localPath)
 
 class SubGoogleDriveFS(SubFS):
+	def __repr__(self):
+		return "<SubGoogleDriveFS>"
+
 	def add_parent(self, path, parent_dir):
 		fs, delegatePath = self.delegate_path(path)
 		fs, delegateParentDir = self.delegate_path(parent_dir)
@@ -138,6 +135,8 @@ class SubGoogleDriveFS(SubFS):
 		fs.remove_parent(delegatePath)
 
 class GoogleDriveFS(FS):
+	subfs_class = SubGoogleDriveFS
+
 	def __init__(self, credentials):
 		super().__init__()
 
@@ -205,7 +204,7 @@ class GoogleDriveFS(FS):
 			pathIdMap[pathSoFar] = metadata
 			parentId = metadata["id"] # pylint: disable=unsubscriptable-object
 		# from pprint import pformat
-		# info(f"{path} ->\n{pformat(list(pathIdMap.keys()))}")
+		# _log.info(f"{path} ->\n{pformat(list(pathIdMap.keys()))}")
 		return lambda path_: _IdFromPath(path_, pathIdMap)
 
 	def _itemFromPath(self, path):
@@ -315,7 +314,7 @@ class GoogleDriveFS(FS):
 	def makedir(self, path, permissions=None, recreate=False):
 		_CheckPath(path)
 		with self._lock:
-			info(f"makedir: {path}, {permissions}, {recreate}")
+			_log.info(f"makedir: {path}, {permissions}, {recreate}")
 			parentMetadata = self._itemFromPath(dirname(path))
 
 			if isinstance(parentMetadata, list): # adding new folder to root folder
@@ -337,7 +336,7 @@ class GoogleDriveFS(FS):
 	def openbin(self, path, mode="r", buffering=-1, **options):  # pylint: disable=unused-argument
 		_CheckPath(path)
 		with self._lock:
-			info(f"openbin: {path}, {mode}, {buffering}")
+			_log.info(f"openbin: {path}, {mode}, {buffering}")
 			parsedMode = Mode(mode)
 			IdFromPath = self._itemsFromPath(path)
 			item = IdFromPath(path)
@@ -348,7 +347,7 @@ class GoogleDriveFS(FS):
 			if item is not None and item["mimeType"] == _folderMimeType:
 				raise FileExpected(path)
 			parentDir = dirname(path)
-			debug(f"looking up id for {parentDir}")
+			_log.debug(f"looking up id for {parentDir}")
 			parentDirItem = IdFromPath(parentDir)
 			# make sure that the parent directory exists if we're writing
 			if parsedMode.writing and parentDirItem is None:
@@ -360,7 +359,7 @@ class GoogleDriveFS(FS):
 			raise RemoveRootError()
 		_CheckPath(path)
 		with self._lock:
-			info(f"remove: {path}")
+			_log.info(f"remove: {path}")
 			metadata = self._itemFromPath(path)
 			if metadata is None:
 				raise ResourceNotFound(path=path)
@@ -373,7 +372,7 @@ class GoogleDriveFS(FS):
 			raise RemoveRootError()
 		_CheckPath(path)
 		with self._lock:
-			info(f"removedir: {path}")
+			_log.info(f"removedir: {path}")
 			metadata = self._itemFromPath(path)
 			if metadata is None:
 				raise ResourceNotFound(path=path)
@@ -394,7 +393,7 @@ class GoogleDriveFS(FS):
 	def scandir(self, path, namespaces=None, page=None):
 		_CheckPath(path)
 		with self._lock:
-			info(f"scandir: {path}, {namespaces}, {page}")
+			_log.info(f"scandir: {path}, {namespaces}, {page}")
 			metadata = self._itemFromPath(path)
 			if metadata is None:
 				raise ResourceNotFound(path=path)
@@ -408,7 +407,7 @@ class GoogleDriveFS(FS):
 
 	# Non-essential - takes advantage of the file contents are already being on the server
 	def copy(self, src_path, dst_path, overwrite=False):
-		info(f"copy: {src_path} -> {dst_path}, {overwrite}")
+		_log.info(f"copy: {src_path} -> {dst_path}, {overwrite}")
 		_CheckPath(src_path)
 		_CheckPath(dst_path)
 		with self._lock:
@@ -438,7 +437,7 @@ class GoogleDriveFS(FS):
 
 	# Non-essential - takes advantage of the file contents already being on the server
 	def move(self, src_path, dst_path, overwrite=False):
-		info(f"move: {src_path} -> {dst_path}, {overwrite}")
+		_log.info(f"move: {src_path} -> {dst_path}, {overwrite}")
 		_CheckPath(src_path)
 		_CheckPath(dst_path)
 		with self._lock:
@@ -475,7 +474,7 @@ class GoogleDriveFS(FS):
 				body={"name": basename(dst_path)}).execute(num_retries=self.retryCount)
 
 	def add_parent(self, path, parent_dir):
-		info(f"add_parent: {path} -> {parent_dir}")
+		_log.info(f"add_parent: {path} -> {parent_dir}")
 		_CheckPath(path)
 		_CheckPath(parent_dir)
 		with self._lock:
@@ -503,7 +502,7 @@ class GoogleDriveFS(FS):
 				body={}).execute(num_retries=self.retryCount)
 
 	def remove_parent(self, path):
-		info(f"remove_parent: {path}")
+		_log.info(f"remove_parent: {path}")
 		_CheckPath(path)
 		with self._lock:
 			IdFromPath = self._itemsFromPath(path)

@@ -9,7 +9,7 @@ class GoogleDriveFSOpener(Opener): # pylint: disable=too-few-public-methods
 	protocols = ['googledrive']
 
 	def open_fs(self, fs_url, parse_result, writeable, create, cwd): # pylint: disable=too-many-arguments
-		_, _, directory = parse_result.resource.partition('/')
+		directory = parse_result.resource
 
 		credentials = Credentials(parse_result.params.get("access_token"),
 			refresh_token=parse_result.params.get("refresh_token", None),
