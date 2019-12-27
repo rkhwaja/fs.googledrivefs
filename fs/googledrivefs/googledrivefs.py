@@ -309,7 +309,7 @@ class GoogleDriveFS(FS):
 	def _create_subdirectory(self, name, path, parents):
 		newMetadata = {"name": basename(name), "parents": parents, "mimeType": _folderMimeType}
 		self.drive.files().create(body=newMetadata, fields="id").execute(num_retries=self.retryCount)
-		return SubFS(self, path)
+		return SubGoogleDriveFS(self, path)
 
 	def makedir(self, path, permissions=None, recreate=False):
 		_CheckPath(path)
