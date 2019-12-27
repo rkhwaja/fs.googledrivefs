@@ -5,7 +5,6 @@ from io import BytesIO, SEEK_END
 from logging import getLogger
 from os import close, remove
 from os.path import splitext
-from pprint import pformat
 from tempfile import mkstemp
 
 from googleapiclient.discovery import build
@@ -16,7 +15,7 @@ from fs.errors import DestinationExists, DirectoryExists, DirectoryExpected, Dir
 from fs.info import Info
 from fs.iotools import RawWrapper
 from fs.mode import Mode
-from fs.path import abspath, basename, dirname, iteratepath, join
+from fs.path import basename, dirname, iteratepath, join
 from fs.subfs import SubFS
 from fs.time import datetime_to_epoch
 
@@ -25,6 +24,7 @@ _folderMimeType = "application/vnd.google-apps.folder"
 _sharingUrl = "https://drive.google.com/open?id="
 _INVALID_PATH_CHARS = ":\0"
 _log = getLogger("fs.googledrivefs")
+_rootMetadata = {"id": "root", "mimeType": _folderMimeType}
 
 def _Escape(name):
 	name = name.replace("\\", "\\\\")
@@ -35,16 +35,6 @@ def _CheckPath(path):
 	for char in _INVALID_PATH_CHARS:
 		if char in path:
 			raise InvalidCharsInPath(path)
-
-def _IdFromPath(path, pathIdMap):
-	# if path[0] == "/":
-	# 	path2 = path[1:]
-	# result = pathIdMap.get(path, pathIdMap.get(path2, None))
-	result = pathIdMap.get(abspath(path), None)
-	if result is None:
-		_log.info(f"Looking up {path}")
-		_log.info(f"Not found in {pformat(list(pathIdMap.keys()))}")
-	return result
 
 # TODO - switch to MediaIoBaseUpload and use BytesIO
 class _UploadOnClose(RawWrapper):
@@ -182,17 +172,12 @@ class GoogleDriveFS(FS):
 		return result[0] if len(result) == 1 else None
 
 	def _childrenById(self, parentId):
-		if not parentId:
-			parentId = 'root'
-			# Google drive seems to somehow distinguish it's real root folder from folder named "root" in root folder.
 		query = f"trashed=False and '{parentId}' in parents"
 		return self._fileQuery(query)
 
 	def _itemsFromPath(self, path):
-		pathIdMap = {}
+		pathIdMap = {"/": _rootMetadata, "": _rootMetadata}
 		ipath = iteratepath(path)
-		if not ipath:
-			return {"/": self._childrenById(None)} # querying root folder. will return a list, not dict
 
 		pathSoFar = ""
 		parentId = None
@@ -201,21 +186,22 @@ class GoogleDriveFS(FS):
 			metadata = self._childByName(parentId, childName)
 			if metadata is None:
 				break
+
 			pathIdMap[pathSoFar] = metadata
 			parentId = metadata["id"] # pylint: disable=unsubscriptable-object
-		# from pprint import pformat
-		# _log.info(f"{path} ->\n{pformat(list(pathIdMap.keys()))}")
-		return lambda path_: _IdFromPath(path_, pathIdMap)
+
+		return pathIdMap
 
 	def _itemFromPath(self, path):
-		metadata = None
 		ipath = iteratepath(path)
-		if ipath:
-			for child_name in ipath:
-				parent_id = metadata["id"] if metadata else None # pylint: disable=unsubscriptable-object
-				metadata = self._childByName(parent_id, child_name)
-		else:
-			metadata = self._childrenById(None) # querying root folder. will return a list, not dict
+
+		metadata = _rootMetadata
+		for childName in ipath:
+			parentId = metadata["id"] # pylint: disable=unsubscriptable-object
+			metadata = self._childByName(parentId, childName)
+			if metadata is None:
+				break
+
 		return metadata
 
 	def _infoFromMetadata(self, metadata):  # pylint: disable=no-self-use
@@ -306,7 +292,7 @@ class GoogleDriveFS(FS):
 		with self._lock:
 			return [x.name for x in self.scandir(path)]
 
-	def _create_subdirectory(self, name, path, parents):
+	def _createSubdirectory(self, name, path, parents):
 		newMetadata = {"name": basename(name), "parents": parents, "mimeType": _folderMimeType}
 		self.drive.files().create(body=newMetadata, fields="id").execute(num_retries=self.retryCount)
 		return SubGoogleDriveFS(self, path)
@@ -317,11 +303,6 @@ class GoogleDriveFS(FS):
 			_log.info(f"makedir: {path}, {permissions}, {recreate}")
 			parentMetadata = self._itemFromPath(dirname(path))
 
-			if isinstance(parentMetadata, list): # adding new folder to root folder
-				if not self._childByName(None, path):
-					return self._create_subdirectory(path, path, None)
-				raise DirectoryExists(path=path)
-
 			if parentMetadata is None:
 				raise ResourceNotFound(path=path)
 
@@ -331,15 +312,15 @@ class GoogleDriveFS(FS):
 					raise DirectoryExists(path=path)
 				return SubFS(self, path)
 
-			return self._create_subdirectory(basename(path), path, [parentMetadata["id"]])
+			return self._createSubdirectory(basename(path), path, [parentMetadata["id"]])
 
 	def openbin(self, path, mode="r", buffering=-1, **options):  # pylint: disable=unused-argument
 		_CheckPath(path)
 		with self._lock:
 			_log.info(f"openbin: {path}, {mode}, {buffering}")
 			parsedMode = Mode(mode)
-			IdFromPath = self._itemsFromPath(path)
-			item = IdFromPath(path)
+			idsFromPath = self._itemsFromPath(path)
+			item = idsFromPath.get(path)
 			if parsedMode.exclusive and item is not None:
 				raise FileExists(path)
 			if parsedMode.reading and not parsedMode.create and item is None:
@@ -348,7 +329,7 @@ class GoogleDriveFS(FS):
 				raise FileExpected(path)
 			parentDir = dirname(path)
 			_log.debug(f"looking up id for {parentDir}")
-			parentDirItem = IdFromPath(parentDir)
+			parentDirItem = idsFromPath.get(parentDir)
 			# make sure that the parent directory exists if we're writing
 			if parsedMode.writing and parentDirItem is None:
 				raise ResourceNotFound(parentDir)
@@ -383,7 +364,7 @@ class GoogleDriveFS(FS):
 				raise DirectoryNotEmpty(path=path)
 			self.drive.files().delete(fileId=metadata["id"]).execute(num_retries=self.retryCount)
 
-	def _generate_children(self, children, page):
+	def _generateChildren(self, children, page):
 		if page:
 			return (self._infoFromMetadata(x) for x in children[page[0]:page[1]])
 		return (self._infoFromMetadata(x) for x in children)
@@ -397,13 +378,12 @@ class GoogleDriveFS(FS):
 			metadata = self._itemFromPath(path)
 			if metadata is None:
 				raise ResourceNotFound(path=path)
-			if isinstance(metadata, list): # root folder
-				children = self._childrenById(None)
-				return self._generate_children(children, page)
+
 			if metadata["mimeType"] != _folderMimeType:
 				raise DirectoryExpected(path=path)
+
 			children = self._childrenById(metadata["id"])
-			return self._generate_children(children, page)
+			return self._generateChildren(children, page)
 
 	# Non-essential - takes advantage of the file contents are already being on the server
 	def copy(self, src_path, dst_path, overwrite=False):
@@ -479,13 +459,13 @@ class GoogleDriveFS(FS):
 		_CheckPath(parent_dir)
 		with self._lock:
 			targetPath = join(parent_dir, basename(path))
-			IdFromPath = self._itemsFromPath(targetPath)
+			idsFromPath = self._itemsFromPath(targetPath)
 
 			# don't allow violation of our requirement to keep filename unique inside new directory
-			if IdFromPath(targetPath) is not None:
+			if targetPath in idsFromPath:
 				raise FileExists(targetPath)
 
-			parentDirItem = IdFromPath(parent_dir)
+			parentDirItem = idsFromPath.get(parent_dir)
 			if parentDirItem is None:
 				raise ResourceNotFound(parent_dir)
 
@@ -505,11 +485,11 @@ class GoogleDriveFS(FS):
 		_log.info(f"remove_parent: {path}")
 		_CheckPath(path)
 		with self._lock:
-			IdFromPath = self._itemsFromPath(path)
-			sourceItem = IdFromPath(path)
+			idsFromPath = self._itemsFromPath(path)
+			sourceItem = idsFromPath.get(path)
 			if sourceItem is None:
 				raise ResourceNotFound(path)
 			self.drive.files().update(
 				fileId=sourceItem["id"],
-				removeParents=IdFromPath(dirname(path))["id"],
+				removeParents=idsFromPath[dirname(path)]["id"],
 				body={}).execute(num_retries=self.retryCount)

@@ -81,9 +81,16 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 		self.assert_not_exists("parent1/file")
 		self.assert_bytes("parent3/file", b"data1")
 
-def test_root(): # pylint: disable=no-self-use
+def test_root():
 	fullFS = FullFS()
 	getLogger("fs.googledrivefs").info(fullFS.listdir("/"))
+
+def test_write_file_to_root():
+	filename = f"testgoogledrivefs_{uuid4()}"
+	fs = FullFS()
+	fs.writebytes(filename, b"")
+	assert fs.exists(filename)
+	fs.remove(filename)
 
 def test_opener():
 	registry.install(GoogleDriveFSOpener())
