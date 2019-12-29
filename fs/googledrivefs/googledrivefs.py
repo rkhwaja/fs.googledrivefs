@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO, SEEK_END
 from logging import getLogger
 from os import close, remove
@@ -17,7 +17,7 @@ from fs.iotools import RawWrapper
 from fs.mode import Mode
 from fs.path import basename, dirname, iteratepath, join
 from fs.subfs import SubFS
-from fs.time import datetime_to_epoch
+from fs.time import datetime_to_epoch, epoch_to_datetime
 
 _fileMimeType = "application/vnd.google-apps.file"
 _folderMimeType = "application/vnd.google-apps.folder"
@@ -38,7 +38,7 @@ def _CheckPath(path):
 
 # TODO - switch to MediaIoBaseUpload and use BytesIO
 class _UploadOnClose(RawWrapper):
-	def __init__(self, fs, path, thisMetadata, parentMetadata, parsedMode): # pylint: disable=too-many-arguments
+	def __init__(self, fs, path, thisMetadata, parentMetadata, parsedMode, **options): # pylint: disable=too-many-arguments
 		self.fs = fs
 		self.path = path
 		self.parentMetadata = parentMetadata
@@ -46,6 +46,7 @@ class _UploadOnClose(RawWrapper):
 		self.thisMetadata = thisMetadata
 		# keeping a parsed mode separate from the base class's mode member
 		self.parsedMode = parsedMode
+		self.options = options
 		fileHandle, self.localPath = mkstemp(prefix="pyfilesystem-googledrive-", suffix=splitext(self.path)[1],
 											 text=False)
 		close(fileHandle)
@@ -70,7 +71,13 @@ class _UploadOnClose(RawWrapper):
 		if self.parsedMode.writing:
 			# google doesn't accept the fractional second part
 			now = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
-			onlineMetadata = {"modifiedTime": now}
+			uploadMetadata = {"modifiedTime": now}
+			if self.thisMetadata is None:
+				uploadMetadata.update(
+					{"name": basename(self.path), "parents": [self.parentMetadata["id"]], "createdTime": now})
+				if "createdDateTime" in self.options:
+					uploadMetadata.update(
+						{"createdTime": self.options["createdDateTime"].replace(microsecond=0).isoformat() + "Z"})
 
 			with open(self.localPath, "rb") as f:
 				dataToWrite = f.read()
@@ -80,9 +87,7 @@ class _UploadOnClose(RawWrapper):
 				upload = MediaFileUpload(self.localPath, resumable=True)
 				if self.thisMetadata is None:
 					_log.debug("Creating new file")
-					onlineMetadata.update(
-						{"name": basename(self.path), "parents": [self.parentMetadata["id"]], "createdTime": now})
-					request = self.fs.drive.files().create(body=onlineMetadata, media_body=upload)
+					request = self.fs.drive.files().create(body=uploadMetadata, media_body=upload)
 				else:
 					_log.debug("Updating existing file")
 					request = self.fs.drive.files().update(fileId=self.thisMetadata["id"], body={}, media_body=upload)
@@ -97,10 +102,8 @@ class _UploadOnClose(RawWrapper):
 				fh = BytesIO(b"")
 				media = MediaIoBaseUpload(fh, mimetype="application/octet-stream", chunksize=-1, resumable=False)
 				if self.thisMetadata is None:
-					onlineMetadata.update(
-						{"name": basename(self.path), "parents": [self.parentMetadata["id"]], "createdTime": now})
 					createdFile = self.fs.drive.files().create(
-						body=onlineMetadata,
+						body=uploadMetadata,
 						media_body=media).execute(num_retries=self.fs.retryCount)
 					_log.debug(f"Created empty file: {createdFile}")
 				else:
@@ -244,6 +247,16 @@ class GoogleDriveFS(FS):
 			metadata = self._itemFromPath(path)
 			if metadata is None or isinstance(metadata, list):
 				raise ResourceNotFound(path=path)
+			updatedData = {}
+
+			for namespace in info:
+				for name, value in info[namespace].items():
+					if namespace != "details":
+						continue
+					if name == "modified":
+						# incoming datetimes should be utc timestamps, Google Drive expects RFC 3339
+						updatedData["modifiedTime"] = epoch_to_datetime(value).replace(tzinfo=timezone.utc).isoformat()
+			self.drive.files().update(fileId=metadata["id"], body=updatedData).execute(num_retries=self.retryCount)
 
 	def share(self, path, email=None, role='reader'):
 		"""
@@ -333,7 +346,7 @@ class GoogleDriveFS(FS):
 			# make sure that the parent directory exists if we're writing
 			if parsedMode.writing and parentDirItem is None:
 				raise ResourceNotFound(parentDir)
-			return _UploadOnClose(fs=self, path=path, thisMetadata=item, parentMetadata=parentDirItem, parsedMode=parsedMode)
+			return _UploadOnClose(fs=self, path=path, thisMetadata=item, parentMetadata=parentDirItem, parsedMode=parsedMode, **options)
 
 	def remove(self, path):
 		if path == '/':

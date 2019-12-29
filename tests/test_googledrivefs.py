@@ -1,3 +1,4 @@
+from datetime import datetime
 from json import load, loads
 from logging import getLogger
 from os import environ
@@ -10,6 +11,7 @@ from fs.errors import DirectoryExpected, FileExists, ResourceNotFound
 from fs.googledrivefs import GoogleDriveFS, GoogleDriveFSOpener, SubGoogleDriveFS
 from fs.opener import open_fs, registry
 from fs.test import FSTestCases
+from fs.time import datetime_to_epoch
 
 _safeDirForTests = "/test-googledrivefs"
 
@@ -36,6 +38,19 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 
 	def destroy_fs(self, _):
 		self.fullFS.removetree(self.testSubdir)
+
+	def test_setinfo2(self):
+		self.fs.touch("file")
+		modifiedTime = datetime(2000, 1, 1, 14, 42, 42)
+		self.fs.setinfo("file", {"details": {"modified": datetime_to_epoch(modifiedTime)}})
+		info_ = self.fs.getinfo("file")
+		assert datetime_to_epoch(info_.modified) == datetime_to_epoch(modifiedTime), f"{info_.modified}"
+
+		createdTime = datetime(1999, 1, 1, 14, 42, 42)
+		with self.fs.openbin("file2", "wb", createdDateTime=createdTime) as f:
+			f.write(b"file2")
+		info_ = self.fs.getinfo("file2")
+		assert datetime_to_epoch(info_.created) == datetime_to_epoch(createdTime), f"{info_.created}"
 
 	def test_directory_paging(self):
 		# default page size is 100
