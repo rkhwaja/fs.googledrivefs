@@ -1,6 +1,5 @@
 from datetime import datetime
 from json import load, loads
-from logging import getLogger
 from os import environ
 from unittest import TestCase
 from uuid import uuid4
@@ -96,9 +95,31 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 		self.assert_not_exists("parent1/file")
 		self.assert_bytes("parent3/file", b"data1")
 
+	def test_read_write_google_metadata(self):
+		filename = "file-for-holding-google-metadata"
+		self.fs.writetext(filename, "boogle boggle")
+
+		info_ = self.fs.getinfo(filename)
+		self.assertIsNone(info_.get("google", "indexableText"))
+		self.assertIsNone(info_.get("google", "appProperties"))
+
+		self.fs.setinfo(filename, {"google": {"appProperties": {"a": "a value"}}})
+
+		info_ = self.fs.getinfo(filename)
+		# self.assertEqual(info_.get("google", "indexableText"), "<author>Gilliam</author>")
+		self.assertEqual(info_.get("google", "appProperties"), {"a": "a value"})
+
+		self.fs.setinfo(filename, {"google": {"indexableText": "<author>Gillaim</author>"}})
+
+		info_ = self.fs.getinfo(filename)
+
+		self.fs.setinfo(filename, {"google": {"appProperties": {"a": None}}})
+		info_ = self.fs.getinfo(filename)
+		self.assertIsNone(info_.get("google", "appProperties"))
+
 def test_root():
 	fullFS = FullFS()
-	getLogger("fs.googledrivefs").info(fullFS.listdir("/"))
+	fullFS.listdir("/")
 
 def test_write_file_to_root():
 	filename = f"testgoogledrivefs_{uuid4()}"

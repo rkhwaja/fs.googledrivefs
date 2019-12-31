@@ -9,6 +9,7 @@ install:
 - poetry install
 script:
 - pylint fs/googledrivefs/ tests/
-- pytest
+# gitlab CI timeout seems to be 50 minutes/3000 seconds
+- pytest --timeout=2700
 after_success:
 - coveralls
