@@ -5,7 +5,8 @@ python:
 - "3.8"
 dist: xenial
 install:
-- pip install fs google-api-python-client google-auth pylint requests-oauthlib pyperclip pytest python-coveralls coverage
+- pip install poetry
+- poetry install
 script:
 - pylint fs/googledrivefs/ tests/
 - pytest
