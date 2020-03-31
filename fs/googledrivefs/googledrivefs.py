@@ -15,12 +15,13 @@ from fs.errors import DestinationExists, DirectoryExists, DirectoryExpected, Dir
 from fs.info import Info
 from fs.iotools import RawWrapper
 from fs.mode import Mode
-from fs.path import basename, dirname, iteratepath, join
+from fs.path import basename, dirname, iteratepath, join, split
 from fs.subfs import SubFS
 from fs.time import datetime_to_epoch, epoch_to_datetime
 
 _fileMimeType = "application/vnd.google-apps.file"
 _folderMimeType = "application/vnd.google-apps.folder"
+_shortcutMimeType = "application/vnd.google-apps.shortcut"
 _sharingUrl = "https://drive.google.com/open?id="
 _INVALID_PATH_CHARS = ":\0"
 _log = getLogger("fs.googledrivefs")
@@ -127,6 +128,11 @@ class SubGoogleDriveFS(SubFS):
 		fs, delegatePath = self.delegate_path(path)
 		fs.remove_parent(delegatePath)
 
+	def add_shortcut(self, shortcut_path, target_path):
+		fs, shortcutPathDelegate = self.delegate_path(shortcut_path)
+		fs, targetPathDelegate = self.delegate_path(target_path)
+		fs.add_shortcut(shortcutPathDelegate, targetPathDelegate)
+
 class GoogleDriveFS(FS):
 	subfs_class = SubGoogleDriveFS
 
@@ -211,6 +217,7 @@ class GoogleDriveFS(FS):
 		isRoot = isinstance(metadata, list)
 		isFolder = isRoot or (metadata["mimeType"] == _folderMimeType)
 		rfc3339 = "%Y-%m-%dT%H:%M:%S.%fZ"
+		permissions = metadata.get("permissions", None)
 		rawInfo = {
 			"basic": {
 				"name": "" if isRoot else metadata["name"],
@@ -226,8 +233,8 @@ class GoogleDriveFS(FS):
 			},
 			"sharing": {
 				"id": None if isRoot else metadata["id"],
-				"permissions": None if isRoot else metadata["permissions"],
-				"is_shared": None if isRoot else len(metadata["permissions"]) > 1
+				"permissions": permissions,
+				"is_shared": len(permissions) > 1 if permissions is not None else None
 			}
 		}
 		if "contentHints" in metadata and "indexableText" in metadata["contentHints"]:
@@ -476,6 +483,7 @@ class GoogleDriveFS(FS):
 
 	def add_parent(self, path, parent_dir):
 		_log.info(f"add_parent: {path} -> {parent_dir}")
+		_log.warning("Multiple parents feature is expected to be removed on 2020-09-30")
 		_CheckPath(path)
 		_CheckPath(parent_dir)
 		with self._lock:
@@ -504,6 +512,7 @@ class GoogleDriveFS(FS):
 
 	def remove_parent(self, path):
 		_log.info(f"remove_parent: {path}")
+		_log.warning("Multiple parents feature is expected to be removed on 2020-09-30")
 		_CheckPath(path)
 		with self._lock:
 			idsFromPath = self._itemsFromPath(path)
@@ -514,3 +523,37 @@ class GoogleDriveFS(FS):
 				fileId=sourceItem["id"],
 				removeParents=idsFromPath[dirname(path)]["id"],
 				body={}).execute(num_retries=self.retryCount)
+
+	def add_shortcut(self, shortcut_path, target_path):
+		_log.info(f"add_shortcut: {shortcut_path}, {target_path}")
+		_CheckPath(shortcut_path)
+		_CheckPath(target_path)
+
+		with self._lock:
+			idsFromTargetPath = self._itemsFromPath(target_path)
+			if target_path not in idsFromTargetPath:
+				raise ResourceNotFound(path=target_path)
+
+			targetItem = idsFromTargetPath[target_path]
+			if targetItem["mimeType"] == _folderMimeType:
+				raise FileExpected(target_path)
+
+			idsFromShortcutPath = self._itemsFromPath(shortcut_path)
+			if shortcut_path in idsFromShortcutPath:
+				raise DestinationExists(shortcut_path)
+
+			shortcutParentDir, shortcutName = split(shortcut_path)
+			shortcutParentDirItem = idsFromShortcutPath.get(shortcutParentDir)
+			if shortcutParentDirItem is None:
+				raise ResourceNotFound(shortcutParentDir)
+
+			metadata = {
+				"name": shortcutName,
+				"parents": [shortcutParentDirItem["id"]],
+				"mimeType": _shortcutMimeType,
+				"shortcutDetails": {
+					"targetId": targetItem["id"]
+				}
+			}
+
+			_ = self.drive.files().create(body=metadata, fields="id").execute(num_retries=self.retryCount)

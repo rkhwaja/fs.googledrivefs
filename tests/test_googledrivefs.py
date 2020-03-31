@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from google.oauth2.credentials import Credentials
 
-from fs.errors import DirectoryExpected, FileExists, ResourceNotFound
+from fs.errors import DestinationExists, DirectoryExpected, FileExists, FileExpected, ResourceNotFound
 from fs.googledrivefs import GoogleDriveFS, GoogleDriveFSOpener, SubGoogleDriveFS
 from fs.opener import open_fs, registry
 from fs.test import FSTestCases
@@ -37,6 +37,24 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 
 	def destroy_fs(self, _):
 		self.fullFS.removetree(self.testSubdir)
+
+	def test_shortcut(self):
+		self.fs.touch("file")
+		self.fs.makedir("parent")
+		self.fs.touch("parent/file")
+		with self.assertRaises(FileExpected):
+			self.fs.add_shortcut("shortcut", "parent")
+		with self.assertRaises(ResourceNotFound):
+			self.fs.add_shortcut("shortcut", "file2")
+		with self.assertRaises(DestinationExists):
+			self.fs.add_shortcut("file", "parent/file")
+		with self.assertRaises(ResourceNotFound):
+			self.fs.add_shortcut("parent2/shortcut", "file")
+
+		self.fs.add_shortcut("shortcut", "file")
+		_ = self.fs.getinfo("shortcut")
+		self.fs.remove("shortcut")
+		assert self.fs.exists("shortcut") is False
 
 	def test_setinfo2(self):
 		self.fs.touch("file")
