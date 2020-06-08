@@ -196,6 +196,7 @@ class GoogleDriveFS(FS):
 		return pathIdMap
 
 	def _itemFromPath(self, path):
+		_log.debug(f"_itemFromPath: {path}")
 		ipath = iteratepath(path)
 
 		metadata = _rootMetadata
@@ -205,10 +206,11 @@ class GoogleDriveFS(FS):
 			if metadata is None:
 				break
 
+		_log.debug(f"_itemFromPath -> {metadata}")
 		return metadata
 
 	def _infoFromMetadata(self, metadata):  # pylint: disable=no-self-use
-		isRoot = isinstance(metadata, list)
+		isRoot = isinstance(metadata, list) or metadata == _rootMetadata
 		isFolder = isRoot or (metadata["mimeType"] == _folderMimeType)
 		rfc3339 = "%Y-%m-%dT%H:%M:%S.%fZ"
 		rawInfo = {

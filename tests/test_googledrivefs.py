@@ -121,6 +121,23 @@ def test_root():
 	fullFS = FullFS()
 	fullFS.listdir("/")
 
+def test_makedirs_from_root():
+	fullFS = FullFS()
+
+	_ = fullFS.getinfo("/")
+
+	makedirName = f"testgoogledrivefs_{uuid4()}"
+	fullFS.makedir(makedirName)
+	fullFS.removedir(makedirName)
+
+	makedirsName = f"testgoogledrivefs_{uuid4()}"
+	fullFS.makedirs(f"{makedirsName}")
+	fullFS.removedir(makedirsName)
+
+	withSubdir = f"testgoogledrivefs_{uuid4()}/subdir"
+	fullFS.makedirs(f"{withSubdir}")
+	fullFS.removedir(withSubdir)
+
 def test_write_file_to_root():
 	filename = f"testgoogledrivefs_{uuid4()}"
 	fs = FullFS()
