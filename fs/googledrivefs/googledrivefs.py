@@ -141,6 +141,7 @@ class GoogleDriveFS(FS):
 
 		self.drive = build("drive", "v3", credentials=credentials, cache_discovery=False)
 		self.retryCount = 3
+		self.enforceSingleParent = False
 
 		_meta = self._meta = {
 			"case_insensitive": True,
@@ -321,7 +322,7 @@ class GoogleDriveFS(FS):
 			return [x.name for x in self.scandir(path)]
 
 	def _createSubdirectory(self, name, path, parents):
-		newMetadata = {"name": basename(name), "parents": parents, "mimeType": _folderMimeType}
+		newMetadata = {"name": basename(name), "parents": parents, "mimeType": _folderMimeType, "enforceSingleParent": self.enforceSingleParent}
 		self.drive.files().create(body=newMetadata, fields="id").execute(num_retries=self.retryCount)
 		return SubGoogleDriveFS(self, path)
 
@@ -440,7 +441,7 @@ class GoogleDriveFS(FS):
 			if dstItem is not None:
 				self.drive.files().delete(fileId=dstItem["id"]).execute(num_retries=self.retryCount)
 
-			newMetadata = {"parents": [parentDirItem["id"]], "name": basename(dst_path)}
+			newMetadata = {"parents": [parentDirItem["id"]], "name": basename(dst_path), "enforceSingleParent": self.enforceSingleParent}
 			self.drive.files().copy(fileId=srcItem["id"], body=newMetadata).execute(num_retries=self.retryCount)
 
 	# Non-essential - takes advantage of the file contents already being on the server
@@ -479,7 +480,7 @@ class GoogleDriveFS(FS):
 				fileId=srcItem["id"],
 				addParents=dstParentDirItem["id"],
 				removeParents=srcParentItem["id"],
-				body={"name": basename(dst_path)}).execute(num_retries=self.retryCount)
+				body={"name": basename(dst_path), "enforceSingleParent": self.enforceSingleParent}).execute(num_retries=self.retryCount)
 
 	def add_parent(self, path, parent_dir):
 		_log.info(f"add_parent: {path} -> {parent_dir}")
@@ -508,7 +509,7 @@ class GoogleDriveFS(FS):
 			self.drive.files().update(
 				fileId=sourceItem["id"],
 				addParents=parentDirItem["id"],
-				body={}).execute(num_retries=self.retryCount)
+				body={"enforceSingleParent": self.enforceSingleParent}).execute(num_retries=self.retryCount)
 
 	def remove_parent(self, path):
 		_log.info(f"remove_parent: {path}")
@@ -522,7 +523,7 @@ class GoogleDriveFS(FS):
 			self.drive.files().update(
 				fileId=sourceItem["id"],
 				removeParents=idsFromPath[dirname(path)]["id"],
-				body={}).execute(num_retries=self.retryCount)
+				body={"enforceSingleParent": self.enforceSingleParent}).execute(num_retries=self.retryCount)
 
 	def add_shortcut(self, shortcut_path, target_path):
 		_log.info(f"add_shortcut: {shortcut_path}, {target_path}")
@@ -553,7 +554,8 @@ class GoogleDriveFS(FS):
 				"mimeType": _shortcutMimeType,
 				"shortcutDetails": {
 					"targetId": targetItem["id"]
-				}
+				},
+				"enforceSingleParent": self.enforceSingleParent
 			}
 
 			_ = self.drive.files().create(body=metadata, fields="id").execute(num_retries=self.retryCount)
