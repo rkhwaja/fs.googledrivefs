@@ -1,4 +1,5 @@
 from datetime import datetime
+from hashlib import md5
 from json import load, loads
 from os import environ
 from unittest import TestCase
@@ -37,6 +38,16 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 
 	def destroy_fs(self, _):
 		self.fullFS.removetree(self.testSubdir)
+
+	def test_hashes(self):
+		self.fs.writebytes("file", b"xxxx")
+		expectedHash = md5(b"xxxx").hexdigest()
+		info_ = self.fs.getinfo("file", "hashes")
+		remoteHash = info_.get("hashes", "MD5", None)
+		assert expectedHash == remoteHash
+		self.fs.makedir("dir")
+		info_ = self.fs.getinfo("dir", "hashes")
+		self.assertIsNone(info_.get("hashes", "MD5", None))
 
 	def test_shortcut(self):
 		self.fs.touch("file")

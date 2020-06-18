@@ -158,7 +158,7 @@ class GoogleDriveFS(FS):
 		return "<GoogleDriveFS>"
 
 	def _fileQuery(self, query):
-		allFields = "nextPageToken,files(id,mimeType,kind,name,createdTime,modifiedTime,size,permissions,appProperties,contentHints)"
+		allFields = "nextPageToken,files(id,mimeType,kind,name,createdTime,modifiedTime,size,permissions,appProperties,contentHints,md5Checksum)"
 		response = self.drive.files().list(q=query, fields=allFields).execute(num_retries=self.retryCount)
 		result = response["files"]
 		while "nextPageToken" in response:
@@ -244,6 +244,8 @@ class GoogleDriveFS(FS):
 			rawInfo.update({"google": {"indexableText": metadata["contentHints"]["indexableText"]}})
 		if "appProperties" in metadata:
 			rawInfo.update({"google": {"appProperties": metadata["appProperties"]}})
+		if "md5Checksum" in metadata:
+			rawInfo.update({"hashes": {"MD5": metadata["md5Checksum"]}})
 		# there is also file-type-specific metadata like imageMediaMetadata
 		return Info(rawInfo)
 
