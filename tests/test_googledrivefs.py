@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from hashlib import md5
 from json import load, loads
 from os import environ
@@ -89,6 +89,11 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 			f.write(b'file2')
 		info_ = self.fs.getinfo('file2')
 		assert datetime_to_epoch(info_.created) == datetime_to_epoch(createdTime), f'{info_.created}'
+
+		newCreatedTime = createdTime + timedelta(days=1)
+		self.fs.setinfo("file2", {"details": {"created": datetime_to_epoch(newCreatedTime)}})
+		info_ = self.fs.getinfo("file2")
+		assert datetime_to_epoch(info_.created) == datetime_to_epoch(newCreatedTime), f"{info_.created}"
 
 	def test_directory_paging(self):
 		# default page size is 100

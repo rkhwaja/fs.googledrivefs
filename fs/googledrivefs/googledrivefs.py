@@ -268,6 +268,9 @@ class GoogleDriveFS(FS):
 						if name == 'modified':
 							# incoming datetimes should be utc timestamps, Google Drive expects RFC 3339
 							updatedData['modifiedTime'] = epoch_to_datetime(value).replace(tzinfo=timezone.utc).isoformat()
+						elif name == 'created':
+							# incoming datetimes should be utc timestamps, Google Drive expects RFC 3339
+							updatedData['createdTime'] = epoch_to_datetime(value).replace(tzinfo=timezone.utc).isoformat()
 					elif namespace == 'google':
 						if name == 'indexableText':
 							updatedData['contentHints'] = {'indexableText': value}
