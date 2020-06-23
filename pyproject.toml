@@ -25,6 +25,7 @@ python = ">=3.6"
 fs = ">=2.4.10"
 google-api-python-client = ">=1.6.3"
 google-auth = ">=1.5.1"
+auto-changelog = "^0.5.1"
 
 [tool.poetry.dev-dependencies]
 pytest = ">=3.10"
