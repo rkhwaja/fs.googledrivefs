@@ -6,7 +6,7 @@ from google.oauth2.credentials import Credentials # pylint: disable=wrong-import
 from .googledrivefs import GoogleDriveFS
 
 class GoogleDriveFSOpener(Opener): # pylint: disable=too-few-public-methods
-	protocols = ['googledrive']
+	protocols = ["googledrive"]
 
 	def open_fs(self, fs_url, parse_result, writeable, create, cwd): # pylint: disable=too-many-arguments
 		directory = parse_result.resource

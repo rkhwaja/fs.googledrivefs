@@ -8,7 +8,7 @@ install:
 - pip install poetry
 - poetry install
 script:
-- pylint fs/googledrivefs/ tests/
+- pylint --load-plugins pylint_quotes fs/googledrivefs/ tests/
 # travis CI timeout seems to be 50 minutes/3000 seconds
 - pytest --timeout=2700
 after_success:

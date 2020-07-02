@@ -170,7 +170,7 @@ class GoogleDriveFS(FS):
 		# this "name=" clause seems to be case-insensitive, which means it's easier to model this
 		# as a case-insensitive filesystem
 		if not parentId:
-			parentId = 'root'
+			parentId = "root"
 			# Google drive seems to somehow distinguish it's real root folder from folder named "root" in root folder.
 		query = f"trashed=False and name='{_Escape(childName)}' and '{parentId}' in parents"
 		result = self._fileQuery(query)
@@ -278,7 +278,7 @@ class GoogleDriveFS(FS):
 							updatedData["appProperties"] = value
 			self.drive.files().update(fileId=metadata["id"], body=updatedData).execute(num_retries=self.retryCount)
 
-	def share(self, path, email=None, role='reader'):
+	def share(self, path, email=None, role="reader"):
 		"""
 		Shares item.
 		:param path: item path
@@ -291,13 +291,13 @@ class GoogleDriveFS(FS):
 			metadata = self._itemFromPath(path)
 			if metadata is None or isinstance(metadata, list):
 				raise ResourceNotFound(path=path)
-			if role not in ('reader', 'writer', 'commenter', 'fileOrganizer', 'organizer', 'owner'):
-				raise OperationFailed(path=path, msg=f'unknown sharing role: {role}')
+			if role not in ("reader", "writer", "commenter", "fileOrganizer", "organizer", "owner"):
+				raise OperationFailed(path=path, msg=f"unknown sharing role: {role}")
 			if email:
-				permissions = {'role': role, 'type': 'user', 'emailAddress': email}
+				permissions = {"role": role, "type": "user", "emailAddress": email}
 			else:
-				permissions = {'role': role, 'type': 'anyone'}
-			self.drive.permissions().create(fileId=metadata['id'], body=permissions).execute(num_retries=self.retryCount)
+				permissions = {"role": role, "type": "anyone"}
+			self.drive.permissions().create(fileId=metadata["id"], body=permissions).execute(num_retries=self.retryCount)
 			return self.geturl(path)
 
 	def hasurl(self, path, purpose="download"):
@@ -369,7 +369,7 @@ class GoogleDriveFS(FS):
 			return _UploadOnClose(fs=self, path=path, thisMetadata=item, parentMetadata=parentDirItem, parsedMode=parsedMode, **options)
 
 	def remove(self, path):
-		if path == '/':
+		if path == "/":
 			raise RemoveRootError()
 		_CheckPath(path)
 		with self._lock:
@@ -382,7 +382,7 @@ class GoogleDriveFS(FS):
 			self.drive.files().delete(fileId=metadata["id"]).execute(num_retries=self.retryCount)
 
 	def removedir(self, path):
-		if path == '/':
+		if path == "/":
 			raise RemoveRootError()
 		_CheckPath(path)
 		with self._lock:
