@@ -24,6 +24,7 @@ requests-oauthlib = "^1.0"
 pyperclip = "^1.7"
 pylint = ">=2.5.3"
 coveralls = "^2.0.0"
+pylint-quotes = "^0.2.1"
 
 [tool.poetry.plugins] # Optional super table
 
@@ -33,6 +34,7 @@ coveralls = "^2.0.0"
 [tool.pylint.format]
 indent-string = "\t"
 max-line-length = "200"
+string-quote = "double"
 
 [tool.pylint.messages_control]
 # no-member to remove false positives with objects constructed via google's discovery protocol
