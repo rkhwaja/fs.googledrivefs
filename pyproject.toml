@@ -39,15 +39,25 @@ pyngrok = ">=7"
 pytest-localserver = ">=0.5.0"
 pytest-xdist = ">=3.2.1"
 ruff = ">=0.0.291"
+yapf = ">=0.31.0"
 
 [tool.poe.tasks]
 lint = "ruff fs/googledrivefs/ tests/"
+fmt = "yapf --recursive --in-place fs tests "
 
 [tool.poe.tasks.test]
 shell = """
 pytest -n 4 --cov=fs/googledrivefs --timeout=2700 || exit 1
 coverage xml
 """
+
+[tool.yapf]
+based_on_style = "pep8"
+use_tabs = true
+column_limit = 200
+blank_lines_around_top_level_definition = 1
+continuation_align_style = "fixed"
+spaces_before_comment = 1
 
 [tool.poetry.plugins] # Optional super table
 
