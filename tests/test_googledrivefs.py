@@ -53,6 +53,7 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 		self.fs.touch("file")
 		self.fs.makedir("parent")
 		self.fs.touch("parent/file")
+		assert self.fs.getinfo("parent/file", ["google"]).get("google", "isShortcut") is False
 		with self.assertRaises(FileExpected):
 			self.fs.add_shortcut("shortcut", "parent")
 		with self.assertRaises(ResourceNotFound):
@@ -63,7 +64,8 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 			self.fs.add_shortcut("parent2/shortcut", "file")
 
 		self.fs.add_shortcut("shortcut", "file")
-		_ = self.fs.getinfo("shortcut")
+		info_ = self.fs.getinfo("shortcut", ["google"])
+		assert info_.get("google", "isShortcut") is True
 		self.fs.remove("shortcut")
 		assert self.fs.exists("shortcut") is False
 
@@ -133,14 +135,13 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 		self.assertIsNone(info_.get("google", "appProperties"))
 
 		self.fs.setinfo(filename, {"google": {"appProperties": {"a": "a value"}}})
-
 		info_ = self.fs.getinfo(filename)
-		# self.assertEqual(info_.get("google", "indexableText"), "<author>Gilliam</author>")
 		self.assertEqual(info_.get("google", "appProperties"), {"a": "a value"})
 
+		# Can't read back indexableText but we can check that we didn't wipe out other metadata
 		self.fs.setinfo(filename, {"google": {"indexableText": "<author>Gillaim</author>"}})
-
 		info_ = self.fs.getinfo(filename)
+		self.assertEqual(info_.get("google", "appProperties"), {"a": "a value"})
 
 		self.fs.setinfo(filename, {"google": {"appProperties": {"a": None}}})
 		info_ = self.fs.getinfo(filename)

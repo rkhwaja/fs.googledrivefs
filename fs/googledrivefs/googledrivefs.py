@@ -240,12 +240,16 @@ class GoogleDriveFS(FS):
 				"is_shared": len(permissions) > 1 if permissions is not None else None
 			}
 		}
+		googleMetadata = {}
 		if "contentHints" in metadata and "indexableText" in metadata["contentHints"]:
-			rawInfo.update({"google": {"indexableText": metadata["contentHints"]["indexableText"]}})
+			googleMetadata.update({"indexableText": metadata["contentHints"]["indexableText"]})
 		if "appProperties" in metadata:
-			rawInfo.update({"google": {"appProperties": metadata["appProperties"]}})
+			googleMetadata.update({"appProperties": metadata["appProperties"]})
 		if "md5Checksum" in metadata:
 			rawInfo.update({"hashes": {"MD5": metadata["md5Checksum"]}})
+		if "mimeType" in metadata:
+			googleMetadata.update({"isShortcut": metadata["mimeType"] == _shortcutMimeType})
+		rawInfo.update({"google": googleMetadata})
 		# there is also file-type-specific metadata like imageMediaMetadata
 		return Info(rawInfo)
 
