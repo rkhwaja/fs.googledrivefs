@@ -54,6 +54,13 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 	def destroy_fs(self, _):
 		self.fullFS.removetree(self.testSubdir)
 
+	def test_watch(self):
+		with self.assertRaises(ResourceNotFound):
+			self.fs.watch('doesnt-exist', 'https://example.com', 'someid')
+		self.fs.makedir('directory')
+		with self.assertRaises(FileExpected):
+			self.fs.watch('directory', 'https://example.com', 'someid')
+
 	def test_hashes(self):
 		self.fs.writebytes('file', b'xxxx')
 		expectedHash = md5(b'xxxx').hexdigest()
