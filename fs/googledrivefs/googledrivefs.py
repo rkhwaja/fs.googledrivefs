@@ -156,6 +156,21 @@ class GoogleDriveFS(FS):
 		rawResults = self._fileQuery(condition())
 		return (self._infoFromMetadata(x) for x in rawResults)
 
+	def watch(self, path, notificationAddress, expiration, id):
+		ids = self._itemsFromPath(path)
+		if path not in ids:
+			raise ResourceNotFound(path=path)
+		# TODO - do we need resourceId, resourceUri, type?
+		body = {
+			"kind": "api#channel",
+			"id": id,
+			"address": notificationAddress,
+		}
+		if expiration is not None:
+			body["expiration"] = expiration.timestamp()
+		result = self.drive.files().watch(ids[path], body=body)
+		_log.info(f"watch: {result}")
+
 	def _fileQuery(self, query):
 		allFields = f'nextPageToken,files({_ALL_FIELDS})'
 		response = self.drive.files().list(q=query, fields=allFields).execute(num_retries=self.retryCount)
