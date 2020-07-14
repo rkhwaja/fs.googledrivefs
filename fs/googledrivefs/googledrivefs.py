@@ -139,6 +139,10 @@ class SubGoogleDriveFS(SubFS):
 		fs, targetPathDelegate = self.delegate_path(target_path)
 		fs.add_shortcut(shortcutPathDelegate, targetPathDelegate)
 
+	def watch(self, path, notificationAddress, expiration=None, id=None, token=None): # pylint: disable=redefined-builtin,too-many-arguments
+		fs, delegatePath = self.delegate_path(path)
+		fs.watch(delegatePath, notificationAddress, expiration, id, token)
+
 class GoogleDriveFS(FS):
 	subfs_class = SubGoogleDriveFS
 
@@ -187,6 +191,30 @@ class GoogleDriveFS(FS):
 		_log.info(f'search: {condition()}')
 		rawResults = self._fileQuery(condition())
 		return (self._infoFromMetadata(x) for x in rawResults)
+
+	def watch(self, path, notificationAddress, expiration=None, id=None, token=None): # pylint: disable=redefined-builtin,too-many-arguments
+		path = _CheckPath(path)
+		metadataByPath = self._itemsFromPath(path)
+		if path not in metadataByPath:
+			raise ResourceNotFound(path=path)
+		metadata = metadataByPath[path]
+		if metadata['kind'] != 'drive#file':
+			raise FileExpected(path=path)
+		# TODO - do we need resourceId, resourceUri?
+		body = {
+			'kind': 'api#channel',
+			'type': 'web_hook',
+			'address': notificationAddress,
+		}
+		if expiration is not None:
+			body['expiration'] = int(expiration.timestamp() * 1000) # convert to ms
+		if id is not None:
+			body['id'] = id
+		if token is not None:
+			body['token'] = token
+		_log.debug(f'request body: {body}')
+		result = self.drive.files().watch(fileId=metadata['id'], body=body).execute(num_retries=self.retryCount)
+		_log.debug(f'watch: {result}')
 
 	def _fileQuery(self, query):
 		allFields = f'nextPageToken,files({_ALL_FIELDS})'
