@@ -22,6 +22,7 @@ from fs.time import datetime_to_epoch, epoch_to_datetime
 
 _folderMimeType = 'application/vnd.google-apps.folder'
 _shortcutMimeType = 'application/vnd.google-apps.shortcut'
+# _fileMimeType = 'application/vnd.google-apps.file'
 _sharingUrl = 'https://drive.google.com/open?id='
 _log = getLogger(__name__)
 _rootMetadata = {'id': 'root', 'mimeType': _folderMimeType}
@@ -174,6 +175,10 @@ class SubGoogleDriveFS(SubFS):
 		fs, targetPathDelegate = self.delegate_path(target_path)
 		fs.add_shortcut(shortcutPathDelegate, targetPathDelegate)
 
+	def watch(self, path, notification_address, expiration=None, id=None, token=None): # pylint: disable=redefined-builtin,too-many-arguments
+		fs, delegatePath = self.delegate_path(path)
+		fs.watch(delegatePath, notification_address, expiration, id, token)
+
 class GoogleDriveFS(FS):
 	subfs_class = SubGoogleDriveFS
 
@@ -227,6 +232,28 @@ class GoogleDriveFS(FS):
 		with self._lock:
 			rawResults = self._fileQuery(condition())
 		return (_InfoFromMetadata(x) for x in rawResults)
+
+	def watch(self, path, notification_address, id, expiration=None, token=None): # pylint: disable=redefined-builtin,too-many-arguments
+		path = self.validatepath(path)
+		metadataByPath = self._itemsFromPath(path)
+		if path not in metadataByPath:
+			raise ResourceNotFound(path=path)
+		metadata = metadataByPath[path]
+		# if metadata['mimeType'] != _fileMimeType:
+		# 	raise FileExpected(path=path)
+		body = {
+			'kind': 'api#channel',
+			'type': 'web_hook',
+			'address': notification_address,
+			'id': id
+		}
+		if expiration is not None:
+			body['expiration'] = int(expiration.timestamp() * 1000) # convert to ms
+		if token is not None:
+			body['token'] = token
+		_log.debug(f'request body: {body}')
+		result = self._drive.files().watch(fileId=metadata['id'], body=body).execute(num_retries=self.retryCount)
+		_log.debug(f'watch: {result}')
 
 	def _fileQuery(self, query):
 		allFields = f'nextPageToken,files({_ALL_FIELDS})'
