@@ -144,8 +144,7 @@ class GoogleDriveFS(FS):
 		self.enforceSingleParent = False
 
 		_meta = self._meta = {
-			"case_insensitive": True,
-		# it will even let you have 2 identical filenames in the same directory! But the search is case-insensitive
+			"case_insensitive": True, # it will even let you have 2 identical filenames in the same directory! But the search is case-insensitive
 			"invalid_path_chars": _INVALID_PATH_CHARS,  # not sure what else
 			"max_path_length": None,  # don't know what the limit is
 			"max_sys_path_length": None,  # there's no syspath
@@ -156,6 +155,12 @@ class GoogleDriveFS(FS):
 
 	def __repr__(self):
 		return "<GoogleDriveFS>"
+
+	def search(self, condition):
+		_log.info(f"search: {condition()}")
+		rawResults = self._fileQuery(condition())
+		# TODO - take account of paging
+		return (self._infoFromMetadata(x) for x in rawResults)
 
 	def _fileQuery(self, query):
 		allFields = "nextPageToken,files(id,mimeType,kind,name,createdTime,modifiedTime,size,permissions,appProperties,contentHints,md5Checksum)"
@@ -192,7 +197,7 @@ class GoogleDriveFS(FS):
 		pathSoFar = ""
 		parentId = None
 		for childName in ipath:
-			pathSoFar = f"{pathSoFar}/{childName}"
+			pathSoFar = join(pathSoFar, childName)
 			metadata = self._childByName(parentId, childName)
 			if metadata is None:
 				break

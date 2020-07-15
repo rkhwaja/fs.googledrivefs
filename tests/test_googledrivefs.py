@@ -8,8 +8,9 @@ from uuid import uuid4
 from google.oauth2.credentials import Credentials
 
 from fs.errors import DestinationExists, DirectoryExpected, FileExists, FileExpected, ResourceNotFound
-from fs.googledrivefs import GoogleDriveFS, GoogleDriveFSOpener, SubGoogleDriveFS
+from fs.googledrivefs import And, GoogleDriveFS, GoogleDriveFSOpener, MimeTypeEquals, NameEquals, SubGoogleDriveFS
 from fs.opener import open_fs, registry
+from fs.path import join
 from fs.test import FSTestCases
 from fs.time import datetime_to_epoch
 
@@ -150,6 +151,27 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 def test_root():
 	fullFS = FullFS()
 	fullFS.listdir("/")
+
+def test_search():
+	fullFS = FullFS()
+
+	directory = f"testgoogledrivefs_{uuid4()}"
+	fullFS.makedir(directory)
+
+	filename = f"searchtestfilename_{uuid4()}"
+	fullFS.touch(join(directory, filename))
+
+	nameResults = list(fullFS.search(NameEquals(filename)))
+
+	textFilename = f"searchtestfilename_{uuid4()}.txt"
+	with fullFS.open(join(directory, textFilename), "w") as f:
+		f.write("Some text")
+
+	mimeTypeResults = list(fullFS.search(And(MimeTypeEquals("text/plain"), NameEquals(textFilename))))
+	assert len(mimeTypeResults) == 1
+	assert mimeTypeResults[0].name == textFilename
+
+	fullFS.removetree(directory)
 
 def test_makedirs_from_root():
 	fullFS = FullFS()

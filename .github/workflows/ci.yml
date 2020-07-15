@@ -32,10 +32,10 @@ jobs:
         pip install poetry
         poetry config virtualenvs.create false
         poetry install
-    - name: pylint
+    - name: Lint
       run: |
         pylint --load-plugins pylint_quotes fs/googledrivefs/ tests/
-    - name: tests
+    - name: Tests
       env:
         GOOGLEDRIVEFS_TEST_CLIENT_ID: ${{ secrets.GOOGLEDRIVEFS_TEST_CLIENT_ID }}
         GOOGLEDRIVEFS_TEST_CLIENT_SECRET: ${{ secrets.GOOGLEDRIVEFS_TEST_CLIENT_SECRET }}
