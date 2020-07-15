@@ -162,6 +162,8 @@ def test_search():
 	fullFS.touch(join(directory, filename))
 
 	nameResults = list(fullFS.search(NameEquals(filename)))
+	assert len(nameResults) == 1
+	assert nameResults[0].name == filename
 
 	textFilename = f"searchtestfilename_{uuid4()}.txt"
 	with fullFS.open(join(directory, textFilename), "w") as f:
@@ -170,6 +172,9 @@ def test_search():
 	mimeTypeResults = list(fullFS.search(And(MimeTypeEquals("text/plain"), NameEquals(textFilename))))
 	assert len(mimeTypeResults) == 1
 	assert mimeTypeResults[0].name == textFilename
+
+	mimeTypeResultsFail = list(fullFS.search(And(MimeTypeEquals("application/pdf"), NameEquals(textFilename))))
+	assert len(mimeTypeResultsFail) == 0
 
 	fullFS.removetree(directory)
 
