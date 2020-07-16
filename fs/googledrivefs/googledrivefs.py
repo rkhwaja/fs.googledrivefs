@@ -41,6 +41,13 @@ def _CheckPath(path):
 		return path[1:]
 	return path
 
+class _CallbackSync: # pylint: disable=too-few-public-methods
+	def __call__(self, request_id, response, exception):
+		if exception is not None:
+			_log.error(exception)
+			return
+		_log.info(f'req: {request_id}, response: {response}')
+
 # TODO - switch to MediaIoBaseUpload and use BytesIO
 class _UploadOnClose(RawWrapper):
 	def __init__(self, fs, path, thisMetadata, parentMetadata, parsedMode, **options): # pylint: disable=too-many-arguments
@@ -127,6 +134,11 @@ class SubGoogleDriveFS(SubFS):
 		fs, shortcutPathDelegate = self.delegate_path(shortcut_path)
 		fs, targetPathDelegate = self.delegate_path(target_path)
 		fs.add_shortcut(shortcutPathDelegate, targetPathDelegate)
+
+	def copydir(self, src_path, dst_path, create=False):
+		_, delegateSrcPath = self.delegate_path(src_path)
+		fs, delegateDstPath = self.delegate_path(dst_path)
+		fs.copydir(delegateSrcPath, delegateDstPath, create)
 
 class GoogleDriveFS(FS):
 	subfs_class = SubGoogleDriveFS
@@ -518,3 +530,40 @@ class GoogleDriveFS(FS):
 			}
 
 			_ = self.drive.files().create(body=metadata, fields='id').execute(num_retries=self.retryCount)
+
+	def _create_subdirectory_of_item(self, batch, name, parentId):
+		newMetadata = {'name': name, 'parents': [parentId], 'mimeType': _folderMimeType, 'enforceSingleParent': self.enforceSingleParent}
+		batch.add(self.drive.files().create(body=newMetadata, fields="id,name"))
+
+	def _copy_directory_flat(self, batch, fromItem, toItem):
+		_log.info(f'_copy_directory_flat: {fromItem["name"]} -> {toItem["name"]}')
+		for fromChild in self._childrenById(fromItem['id']):
+			if fromChild['mimeType'] == _folderMimeType:
+				toChild = self._childByName(toItem['id'], fromChild['name'])
+				if toChild is None:
+					self._create_subdirectory_of_item(batch, fromChild['name'], toItem['id'])
+				self._copy_directory_flat(batch, fromChild, toChild)
+			else:
+				newMetadata = {'parents': [toItem['id']]}
+				batch.add(self.drive.files().copy(fileId=fromChild['id'], body=newMetadata))
+
+	def copydir(self, src_path, dst_path, create=False):
+		assert False
+		_log.info(f'copydir: {src_path} -> {dst_path}, {create}')
+		src_path = _CheckPath(src_path)
+		dst_path = _CheckPath(dst_path)
+		with self._lock:
+			dstPathItem = self._itemFromPath(dst_path)
+			if dstPathItem is None:
+				if create is False:
+					raise ResourceNotFound(dst_path)
+				self.makedirs(dst_path)
+				dstPathItem = self._itemFromPath(dst_path)
+			srcItem = self._itemFromPath(src_path)
+			# ids = self.drive.files().generateIds(10, 'id', 'drive')
+			callback = _CallbackSync()
+			batch = self.drive.new_batch_http_request(callback=callback)
+			_log.info(srcItem)
+			_log.info(dstPathItem)
+			self._copy_directory_flat(batch, srcItem, dstPathItem)
+			batch.execute()
