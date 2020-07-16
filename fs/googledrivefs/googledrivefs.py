@@ -36,6 +36,9 @@ def _CheckPath(path):
 	for char in _INVALID_PATH_CHARS:
 		if char in path:
 			raise InvalidCharsInPath(path)
+	if path.startswith("/"):
+		return path[1:]
+	return path
 
 # TODO - switch to MediaIoBaseUpload and use BytesIO
 class _UploadOnClose(RawWrapper):
@@ -191,7 +194,7 @@ class GoogleDriveFS(FS):
 		return self._fileQuery(query)
 
 	def _itemsFromPath(self, path):
-		pathIdMap = {"/": _rootMetadata, "": _rootMetadata}
+		pathIdMap = {"": _rootMetadata}
 		ipath = iteratepath(path)
 
 		pathSoFar = ""
@@ -259,7 +262,7 @@ class GoogleDriveFS(FS):
 		return Info(rawInfo)
 
 	def getinfo(self, path, namespaces=None):  # pylint: disable=unused-argument
-		_CheckPath(path)
+		path = _CheckPath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
 			if metadata is None or isinstance(metadata, list):
@@ -267,7 +270,7 @@ class GoogleDriveFS(FS):
 			return self._infoFromMetadata(metadata)
 
 	def setinfo(self, path, info):  # pylint: disable=redefined-outer-name,too-many-branches,unused-argument
-		_CheckPath(path)
+		path = _CheckPath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
 			if metadata is None or isinstance(metadata, list):
@@ -295,7 +298,7 @@ class GoogleDriveFS(FS):
 		:param role: google drive sharing role
 		:return: URL
 		"""
-		_CheckPath(path)
+		path = _CheckPath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
 			if metadata is None or isinstance(metadata, list):
@@ -310,7 +313,7 @@ class GoogleDriveFS(FS):
 			return self.geturl(path)
 
 	def hasurl(self, path, purpose="download"):
-		_CheckPath(path)
+		path = _CheckPath(path)
 		if purpose != "download":
 			raise NoURL(path, purpose, "No such purpose")
 		with self._lock:
@@ -320,7 +323,7 @@ class GoogleDriveFS(FS):
 				return False
 
 	def geturl(self, path, purpose="download"): # pylint: disable=unused-argument
-		_CheckPath(path)
+		path = _CheckPath(path)
 		if purpose != "download":
 			raise NoURL(path, purpose, "No such purpose")
 		with self._lock:
@@ -330,7 +333,7 @@ class GoogleDriveFS(FS):
 			return _sharingUrl + fileInfo.get("sharing", "id")
 
 	def listdir(self, path):
-		_CheckPath(path)
+		path = _CheckPath(path)
 		with self._lock:
 			return [x.name for x in self.scandir(path)]
 
@@ -340,7 +343,7 @@ class GoogleDriveFS(FS):
 		return SubGoogleDriveFS(self, path)
 
 	def makedir(self, path, permissions=None, recreate=False):
-		_CheckPath(path)
+		path = _CheckPath(path)
 		with self._lock:
 			_log.info(f"makedir: {path}, {permissions}, {recreate}")
 			parentMetadata = self._itemFromPath(dirname(path))
@@ -357,7 +360,7 @@ class GoogleDriveFS(FS):
 			return self._createSubdirectory(basename(path), path, [parentMetadata["id"]])
 
 	def openbin(self, path, mode="r", buffering=-1, **options):  # pylint: disable=unused-argument
-		_CheckPath(path)
+		path = _CheckPath(path)
 		with self._lock:
 			_log.info(f"openbin: {path}, {mode}, {buffering}")
 			parsedMode = Mode(mode)
@@ -370,7 +373,7 @@ class GoogleDriveFS(FS):
 			if item is not None and item["mimeType"] == _folderMimeType:
 				raise FileExpected(path)
 			parentDir = dirname(path)
-			_log.debug(f"looking up id for {parentDir}")
+			_log.debug(f"looking up id for {parentDir} in {list(idsFromPath.keys())}")
 			parentDirItem = idsFromPath.get(parentDir)
 			# make sure that the parent directory exists if we're writing
 			if parsedMode.writing and parentDirItem is None:
@@ -380,7 +383,7 @@ class GoogleDriveFS(FS):
 	def remove(self, path):
 		if path == "/":
 			raise RemoveRootError()
-		_CheckPath(path)
+		path = _CheckPath(path)
 		with self._lock:
 			_log.info(f"remove: {path}")
 			metadata = self._itemFromPath(path)
@@ -393,7 +396,7 @@ class GoogleDriveFS(FS):
 	def removedir(self, path):
 		if path == "/":
 			raise RemoveRootError()
-		_CheckPath(path)
+		path = _CheckPath(path)
 		with self._lock:
 			_log.info(f"removedir: {path}")
 			metadata = self._itemFromPath(path)
@@ -414,7 +417,7 @@ class GoogleDriveFS(FS):
 	# Non-essential method - for speeding up walk
 	# Takes advantage of the fact that you get the full metadata for all children in one call
 	def scandir(self, path, namespaces=None, page=None):
-		_CheckPath(path)
+		path = _CheckPath(path)
 		with self._lock:
 			_log.info(f"scandir: {path}, {namespaces}, {page}")
 			metadata = self._itemFromPath(path)
@@ -430,8 +433,8 @@ class GoogleDriveFS(FS):
 	# Non-essential - takes advantage of the file contents are already being on the server
 	def copy(self, src_path, dst_path, overwrite=False):
 		_log.info(f"copy: {src_path} -> {dst_path}, {overwrite}")
-		_CheckPath(src_path)
-		_CheckPath(dst_path)
+		src_path = _CheckPath(src_path)
+		dst_path = _CheckPath(dst_path)
 		with self._lock:
 			parentDir = dirname(dst_path)
 			parentDirItem = self._itemFromPath(parentDir)
@@ -460,8 +463,8 @@ class GoogleDriveFS(FS):
 	# Non-essential - takes advantage of the file contents already being on the server
 	def move(self, src_path, dst_path, overwrite=False):
 		_log.info(f"move: {src_path} -> {dst_path}, {overwrite}")
-		_CheckPath(src_path)
-		_CheckPath(dst_path)
+		src_path = _CheckPath(src_path)
+		dst_path = _CheckPath(dst_path)
 		with self._lock:
 			dstItem = self._itemFromPath(dst_path)
 			if overwrite is False and dstItem is not None:
@@ -498,8 +501,8 @@ class GoogleDriveFS(FS):
 	def add_parent(self, path, parent_dir):
 		_log.info(f"add_parent: {path} -> {parent_dir}")
 		_log.warning("Multiple parents feature is expected to be removed on 2020-09-30")
-		_CheckPath(path)
-		_CheckPath(parent_dir)
+		path = _CheckPath(path)
+		parent_dir = _CheckPath(parent_dir)
 		with self._lock:
 			targetPath = join(parent_dir, basename(path))
 			idsFromPath = self._itemsFromPath(targetPath)
@@ -527,7 +530,7 @@ class GoogleDriveFS(FS):
 	def remove_parent(self, path):
 		_log.info(f"remove_parent: {path}")
 		_log.warning("Multiple parents feature is expected to be removed on 2020-09-30")
-		_CheckPath(path)
+		path = _CheckPath(path)
 		with self._lock:
 			idsFromPath = self._itemsFromPath(path)
 			sourceItem = idsFromPath.get(path)
@@ -540,8 +543,8 @@ class GoogleDriveFS(FS):
 
 	def add_shortcut(self, shortcut_path, target_path):
 		_log.info(f"add_shortcut: {shortcut_path}, {target_path}")
-		_CheckPath(shortcut_path)
-		_CheckPath(target_path)
+		shortcut_path = _CheckPath(shortcut_path)
+		target_path = _CheckPath(target_path)
 
 		with self._lock:
 			idsFromTargetPath = self._itemsFromPath(target_path)
