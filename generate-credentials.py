@@ -27,7 +27,7 @@ class TokenStorageFile:
 def Authorize(clientId, clientSecret, tokenStoragePath):
 	tokenStorage = TokenStorageFile(tokenStoragePath)
 	authorizationBaseUrl = "https://accounts.google.com/o/oauth2/v2/auth"
-	_SCOPE = "https://www.googleapis.com/auth/drive"
+	_SCOPE = "https://www.googleapis.com/auth/drive.file"
 	session = OAuth2Session(client_id=clientId, scope=_SCOPE, redirect_uri="https://localhost")
 	authorizationUrl, _ = session.authorization_url(authorizationBaseUrl, access_type="offline")
 	print(f"Go to the following URL and authorize the app: {authorizationUrl}")
