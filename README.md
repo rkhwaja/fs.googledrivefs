@@ -44,7 +44,7 @@ To run the tests, set the following environment variables:
 Then generate the credentials json file by running
 
 ```bash
-  python generate-credentials.py
+  python tests/generate-credentials.py
 ```
 
 Then run the tests by executing
