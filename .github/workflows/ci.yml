@@ -34,7 +34,7 @@ jobs:
         poetry install
     - name: Lint
       run: |
-        pylint --load-plugins pylint_quotes fs/googledrivefs/ tests/
+        pylint fs/googledrivefs/ tests/
     - name: Tests
       env:
         GOOGLEDRIVEFS_TEST_CLIENT_ID: ${{ secrets.GOOGLEDRIVEFS_TEST_CLIENT_ID }}
