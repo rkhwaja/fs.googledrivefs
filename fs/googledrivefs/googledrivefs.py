@@ -162,7 +162,6 @@ class GoogleDriveFS(FS):
 	def search(self, condition):
 		_log.info(f"search: {condition()}")
 		rawResults = self._fileQuery(condition())
-		# TODO - take account of paging
 		return (self._infoFromMetadata(x) for x in rawResults)
 
 	def _fileQuery(self, query):
@@ -175,13 +174,10 @@ class GoogleDriveFS(FS):
 		return result
 
 	def _childByName(self, parentId, childName):
-		# this "name=" clause seems to be case-insensitive, which means it's easier to model this
-		# as a case-insensitive filesystem
 		if not parentId:
 			parentId = "root"
-			# Google drive seems to somehow distinguish it's real root folder from folder named "root" in root folder.
-		query = f"trashed=False and name='{_Escape(childName)}' and '{parentId}' in parents"
-		result = self._fileQuery(query)
+		# this "name=" clause seems to be case-insensitive, which means it's easier to model this as a case-insensitive filesystem
+		result = self._fileQuery(f"trashed=False and name='{_Escape(childName)}' and '{parentId}' in parents")
 		if len(result) not in [0, 1]:
 			# Google drive doesn't follow the model of a filesystem, really
 			# but since most people will set it up to follow the model, we'll carry on regardless
@@ -190,8 +186,7 @@ class GoogleDriveFS(FS):
 		return result[0] if len(result) == 1 else None
 
 	def _childrenById(self, parentId):
-		query = f"trashed=False and '{parentId}' in parents"
-		return self._fileQuery(query)
+		return self._fileQuery(f"trashed=False and '{parentId}' in parents")
 
 	def _itemsFromPath(self, path):
 		pathIdMap = {"": _rootMetadata}
@@ -211,22 +206,12 @@ class GoogleDriveFS(FS):
 		return pathIdMap
 
 	def _itemFromPath(self, path):
-		_log.debug(f"_itemFromPath: {path}")
-		ipath = iteratepath(path)
-
-		metadata = _rootMetadata
-		for childName in ipath:
-			parentId = metadata["id"] # pylint: disable=unsubscriptable-object
-			metadata = self._childByName(parentId, childName)
-			if metadata is None:
-				break
-
-		_log.debug(f"_itemFromPath -> {metadata}")
-		return metadata
+		pathIdMap = self._itemsFromPath(path)
+		return pathIdMap.get(path)
 
 	def _infoFromMetadata(self, metadata):  # pylint: disable=no-self-use
-		isRoot = isinstance(metadata, list) or metadata == _rootMetadata
-		isFolder = isRoot or (metadata["mimeType"] == _folderMimeType)
+		isRoot = (metadata == _rootMetadata)
+		isFolder = (metadata["mimeType"] == _folderMimeType)
 		rfc3339 = "%Y-%m-%dT%H:%M:%S.%fZ"
 		permissions = metadata.get("permissions", None)
 		rawInfo = {
@@ -243,7 +228,7 @@ class GoogleDriveFS(FS):
 				"type": ResourceType.directory if isFolder else ResourceType.file
 			},
 			"sharing": {
-				"id": None if isRoot else metadata["id"],
+				"id": metadata["id"],
 				"permissions": permissions,
 				"is_shared": len(permissions) > 1 if permissions is not None else None
 			}
@@ -265,7 +250,7 @@ class GoogleDriveFS(FS):
 		path = _CheckPath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
-			if metadata is None or isinstance(metadata, list):
+			if metadata is None:
 				raise ResourceNotFound(path=path)
 			return self._infoFromMetadata(metadata)
 
@@ -273,7 +258,7 @@ class GoogleDriveFS(FS):
 		path = _CheckPath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
-			if metadata is None or isinstance(metadata, list):
+			if metadata is None:
 				raise ResourceNotFound(path=path)
 			updatedData = {}
 			for namespace in info:
@@ -301,7 +286,7 @@ class GoogleDriveFS(FS):
 		path = _CheckPath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
-			if metadata is None or isinstance(metadata, list):
+			if metadata is None:
 				raise ResourceNotFound(path=path)
 			if role not in ("reader", "writer", "commenter", "fileOrganizer", "organizer", "owner"):
 				raise OperationFailed(path=path, msg=f"unknown sharing role: {role}")
@@ -355,7 +340,7 @@ class GoogleDriveFS(FS):
 			if childMetadata is not None:
 				if recreate is False:
 					raise DirectoryExists(path=path)
-				return SubFS(self, path)
+				return SubGoogleDriveFS(self, path)
 
 			return self._createSubdirectory(basename(path), path, [parentMetadata["id"]])
 
