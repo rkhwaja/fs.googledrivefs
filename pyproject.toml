@@ -31,6 +31,9 @@ pylint-quotes = "^0.2.1"
 [tool.poetry.plugins."fs.opener"]
 "googledrive" = "fs.googledrivefs.opener:GoogleDriveFSOpener"
 
+[tool.pylint.master]
+load-plugins = "pylint_quotes"
+
 [tool.pylint.format]
 indent-string = "\t"
 max-line-length = "200"

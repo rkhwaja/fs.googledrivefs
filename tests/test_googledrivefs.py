@@ -191,9 +191,9 @@ def test_makedirs_from_root():
 	fullFS.makedirs(f"{makedirsName}")
 	fullFS.removedir(makedirsName)
 
-	withSubdir = f"testgoogledrivefs_{uuid4()}/subdir"
-	fullFS.makedirs(f"{withSubdir}")
-	fullFS.removedir(withSubdir)
+	parentDir = f"testgoogledrivefs_{uuid4()}"
+	fullFS.makedirs(f"{parentDir}/subdir")
+	fullFS.removetree(parentDir)
 
 def test_write_file_to_root():
 	filename = f"testgoogledrivefs_{uuid4()}"

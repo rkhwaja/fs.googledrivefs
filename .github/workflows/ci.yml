@@ -34,7 +34,7 @@ jobs:
         poetry install
     - name: Lint
       run: |
-        pylint --load-plugins pylint_quotes fs/googledrivefs/ tests/
+        pylint fs/googledrivefs/ tests/
     - name: Tests
       env:
         GOOGLEDRIVEFS_TEST_CLIENT_ID: ${{ secrets.GOOGLEDRIVEFS_TEST_CLIENT_ID }}
@@ -42,4 +42,3 @@ jobs:
         GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY: ${{ secrets.GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY }}
       run: |
         pytest --timeout=2700
-      
