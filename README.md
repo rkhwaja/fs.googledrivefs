@@ -33,6 +33,30 @@ Implementation of [pyfilesystem2](https://docs.pyfilesystem.org/) file system fo
   # fs2 is now a standard pyfilesystem2 file system
 ```
 
+## Default Google Authentication
+
+If your application is accessing the Google Drive API as a 
+[GCP Service Account](https://cloud.google.com/iam/docs/service-accounts), `fs.googledrivefs` will
+default to authenticating using the Service Account credentials specified by the 
+[`GOOGLE_APPLICATION_CREDENTIALS` environment variable](https://cloud.google.com/docs/authentication/getting-started). 
+This can greatly simplify the URLs used by the opener:
+
+```python
+  from fs.opener import open_fs
+
+  fs2 = open_fs("googledrive:///required/path")
+```
+
+You can also use the same method of authentication when using `GoogleDriveFS` directly:
+
+```python
+  import google.auth
+  from fs.googledrivefs import GoogleDriveFS
+
+  credentials, _ = google.auth.default()
+  fs = GoogleDriveFS(credentials=credentials)
+```
+
 # Development
 
 To run the tests, set the following environment variables:
