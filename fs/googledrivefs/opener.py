@@ -23,7 +23,7 @@ class GoogleDriveFSOpener(Opener): # pylint: disable=too-few-public-methods
 			# ..otherwise use default credentials
 			credentials, _ = google.auth.default()
 
-		fs = GoogleDriveFS(credentials)
+		fs = GoogleDriveFS(credentials, parse_result.params.get("root_id", None))
 
 		if directory:
 			return fs.opendir(directory)
