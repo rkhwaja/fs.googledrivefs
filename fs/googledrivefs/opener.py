@@ -1,7 +1,7 @@
 __all__ = ["GoogleDriveFSOpener"]
 
 from fs.opener import Opener
-import google.auth
+import google.auth # pylint: disable=wrong-import-order
 from google.oauth2.credentials import Credentials # pylint: disable=wrong-import-order
 
 from .googledrivefs import GoogleDriveFS

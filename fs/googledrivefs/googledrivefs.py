@@ -11,7 +11,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseUpload
 from fs.base import FS
 from fs.enums import ResourceType
-from fs.errors import DestinationExists, DirectoryExists, DirectoryExpected, DirectoryNotEmpty, FileExists, FileExpected, InvalidCharsInPath, NoURL, ResourceNotFound, OperationFailed, PathError, RemoveRootError
+from fs.errors import DestinationExists, DirectoryExists, DirectoryExpected, DirectoryNotEmpty, FileExists, FileExpected, InvalidCharsInPath, NoURL, ResourceNotFound, OperationFailed, RemoveRootError
 from fs.info import Info
 from fs.iotools import RawWrapper
 from fs.mode import Mode
@@ -26,7 +26,7 @@ _sharingUrl = "https://drive.google.com/open?id="
 _INVALID_PATH_CHARS = ":\0"
 _log = getLogger("fs.googledrivefs")
 _rootMetadata = {"id": "root", "mimeType": _folderMimeType}
-_ALL_FIELDS = 'id,mimeType,kind,name,createdTime,modifiedTime,size,permissions,appProperties,contentHints,md5Checksum'
+_ALL_FIELDS = "id,mimeType,kind,name,createdTime,modifiedTime,size,permissions,appProperties,contentHints,md5Checksum"
 
 def _Escape(name):
 	name = name.replace("\\", "\\\\")
@@ -167,7 +167,7 @@ class GoogleDriveFS(FS):
 		return (self._infoFromMetadata(x) for x in rawResults)
 
 	def _fileQuery(self, query):
-		allFields = f'nextPageToken,files({_ALL_FIELDS})'
+		allFields = f"nextPageToken,files({_ALL_FIELDS})"
 		response = self.drive.files().list(q=query, fields=allFields).execute(num_retries=self.retryCount)
 		result = response["files"]
 		while "nextPageToken" in response:
@@ -202,7 +202,7 @@ class GoogleDriveFS(FS):
 			# the root directory's metadata.
 			rootMetadata = self.drive.files().get(fileId=self.rootId, fields=_ALL_FIELDS).execute()
 			if rootMetadata is None:
-				return
+				return pathIdMap
 			pathIdMap[""] = rootMetadata
 
 		for childName in ipath:
