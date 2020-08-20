@@ -2,9 +2,10 @@ from datetime import datetime
 from hashlib import md5
 from json import load, loads
 from os import environ
-from unittest import TestCase
+from unittest import TestCase, skipUnless
 from uuid import uuid4
 
+import google.auth
 from google.oauth2.credentials import Credentials
 
 from fs.errors import DestinationExists, DirectoryExpected, FileExists, FileExpected, ResourceNotFound
@@ -19,17 +20,23 @@ _safeDirForTests = "/test-googledrivefs"
 def CredentialsDict():
 	if "GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY" in environ:
 		return loads(environ["GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY"])
-	with open(environ["GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH"]) as f:
-		return load(f)
+	elif "GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH" in environ:
+		with open(environ["GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH"]) as f:
+			return load(f)
+	return None
 
 def FullFS():
 	credentialsDict = CredentialsDict()
-	credentials = Credentials(credentialsDict["access_token"],
-		refresh_token=credentialsDict["refresh_token"],
-		token_uri="https://www.googleapis.com/oauth2/v4/token",
-		client_id=environ["GOOGLEDRIVEFS_TEST_CLIENT_ID"],
-		client_secret=environ["GOOGLEDRIVEFS_TEST_CLIENT_SECRET"])
-	return GoogleDriveFS(credentials)
+	if credentialsDict:
+		credentials = Credentials(credentialsDict["access_token"],
+			refresh_token=credentialsDict["refresh_token"],
+			token_uri="https://www.googleapis.com/oauth2/v4/token",
+			client_id=environ["GOOGLEDRIVEFS_TEST_CLIENT_ID"],
+			client_secret=environ["GOOGLEDRIVEFS_TEST_CLIENT_SECRET"])
+	else:
+		credentials, _ = google.auth.default()
+	
+	return GoogleDriveFS(credentials, environ.get("GOOGLEDRIVEFS_TEST_ROOT_ID", None))
 
 class TestGoogleDriveFS(FSTestCases, TestCase):
 	def make_fs(self):
@@ -202,6 +209,7 @@ def test_write_file_to_root():
 	assert fs.exists(filename)
 	fs.remove(filename)
 
+@skipUnless("GOOGLEDRIVEFS_TEST_CLIENT_ID" in environ, "client id and secret required")
 def test_opener():
 	registry.install(GoogleDriveFSOpener())
 	client_id = environ["GOOGLEDRIVEFS_TEST_CLIENT_ID"]
@@ -217,5 +225,21 @@ def test_opener():
 
 	# It should still accept the initial "/" character
 	fs = open_fs(f"googledrive:///test-googledrivefs?access_token={access_token}&refresh_token={refresh_token}&client_id={client_id}&client_secret={client_secret}")
+	assert isinstance(fs, SubGoogleDriveFS), str(fs)
+	assert fs._sub_dir == "/test-googledrivefs" # pylint: disable=protected-access
+
+@skipUnless("GOOGLEDRIVEFS_TEST_ROOT_ID" in environ, "root id required")
+def test_opener_with_root_id():
+	# (default credentials are used for authentication)
+
+	root_id = environ["GOOGLEDRIVEFS_TEST_ROOT_ID"]
+
+	# Without the initial "/" character, it should still be assumed to relative to the root
+	fs = open_fs(f"googledrive://test-googledrivefs?root_id={root_id}")
+	assert isinstance(fs, SubGoogleDriveFS), str(fs)
+	assert fs._sub_dir == "/test-googledrivefs" # pylint: disable=protected-access
+
+	# It should still accept the initial "/" character
+	fs = open_fs(f"googledrive:///test-googledrivefs?root_id={root_id}")
 	assert isinstance(fs, SubGoogleDriveFS), str(fs)
 	assert fs._sub_dir == "/test-googledrivefs" # pylint: disable=protected-access

@@ -129,4 +129,13 @@ Then run the tests by executing
   pytest
 ```
 
-in the root directory. The tests may take an hour or two to complete. They create and destroy many, many files and directories mostly under the /test-googledrivefs directory in the user's Google Drive and a few in the root directory
+in the root directory
+(note that if `GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH` isn't set 
+then the test suite will try to use the default Google credentials).
+The tests may take an hour or two to complete.
+They create and destroy many, many files and directories
+mostly under the /test-googledrivefs directory in the user's Google Drive
+and a few in the root directory
+
+Note that, if your tests are run using a service account,
+you can set the root id using `GOOGLEDRIVEFS_TEST_ROOT_ID`.
