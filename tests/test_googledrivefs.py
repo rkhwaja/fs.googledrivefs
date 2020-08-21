@@ -20,7 +20,7 @@ _safeDirForTests = "/test-googledrivefs"
 def CredentialsDict():
 	if "GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY" in environ:
 		return loads(environ["GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY"])
-	elif "GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH" in environ:
+	if "GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH" in environ:
 		with open(environ["GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH"]) as f:
 			return load(f)
 	return None
@@ -35,7 +35,7 @@ def FullFS():
 			client_secret=environ["GOOGLEDRIVEFS_TEST_CLIENT_SECRET"])
 	else:
 		credentials, _ = google.auth.default()
-	
+
 	return GoogleDriveFS(credentials, environ.get("GOOGLEDRIVEFS_TEST_ROOT_ID", None))
 
 class TestGoogleDriveFS(FSTestCases, TestCase):
