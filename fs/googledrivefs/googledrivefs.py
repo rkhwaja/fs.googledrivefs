@@ -26,6 +26,7 @@ _sharingUrl = "https://drive.google.com/open?id="
 _INVALID_PATH_CHARS = ":\0"
 _log = getLogger("fs.googledrivefs")
 _rootMetadata = {"id": "root", "mimeType": _folderMimeType}
+_ALL_FIELDS = "id,mimeType,kind,name,createdTime,modifiedTime,size,permissions,appProperties,contentHints,md5Checksum"
 
 def _Escape(name):
 	name = name.replace("\\", "\\\\")
@@ -139,12 +140,13 @@ class SubGoogleDriveFS(SubFS):
 class GoogleDriveFS(FS):
 	subfs_class = SubGoogleDriveFS
 
-	def __init__(self, credentials):
+	def __init__(self, credentials, rootId=None):
 		super().__init__()
 
 		self.drive = build("drive", "v3", credentials=credentials, cache_discovery=False)
 		self.retryCount = 3
 		self.enforceSingleParent = False
+		self.rootId = rootId
 
 		_meta = self._meta = {
 			"case_insensitive": True, # it will even let you have 2 identical filenames in the same directory! But the search is case-insensitive
@@ -165,7 +167,7 @@ class GoogleDriveFS(FS):
 		return (self._infoFromMetadata(x) for x in rawResults)
 
 	def _fileQuery(self, query):
-		allFields = "nextPageToken,files(id,mimeType,kind,name,createdTime,modifiedTime,size,permissions,appProperties,contentHints,md5Checksum)"
+		allFields = f"nextPageToken,files({_ALL_FIELDS})"
 		response = self.drive.files().list(q=query, fields=allFields).execute(num_retries=self.retryCount)
 		result = response["files"]
 		while "nextPageToken" in response:
@@ -193,7 +195,16 @@ class GoogleDriveFS(FS):
 		ipath = iteratepath(path)
 
 		pathSoFar = ""
-		parentId = None
+		parentId = self.rootId
+
+		if self.rootId is not None:
+			# if we have been given a `rootId` then get the info for this directory and set it as
+			# the root directory's metadata.
+			rootMetadata = self.drive.files().get(fileId=self.rootId, fields=_ALL_FIELDS).execute()
+			if rootMetadata is None:
+				return pathIdMap
+			pathIdMap[""] = rootMetadata
+
 		for childName in ipath:
 			pathSoFar = join(pathSoFar, childName)
 			metadata = self._childByName(parentId, childName)
