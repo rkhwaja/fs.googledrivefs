@@ -8,6 +8,7 @@ description = "Pyfilesystem2 implementation for Google Drive"
 authors = ["Rehan Khwaja <rehan@khwaja.name>"]
 license = "MIT"
 homepage = "https://github.com/rkhwaja/fs.googledrivefs"
+repository = "https://github.com/rkhwaja/fs.googledrivefs"
 keywords = ["filesystem", "Pyfilesystem2", "google"]
 readme = "README.md"
 classifiers = [
@@ -33,6 +34,8 @@ requests-oauthlib = "^1.0"
 pyperclip = "^1.7"
 pylint = ">=2.5.3"
 pylint-quotes = "^0.2.1"
+gitchangelog = "^3.0.4"
+pystache = "^0.5.4"
 pytest-cov = "^2.10.1"
 
 [tool.poetry.plugins] # Optional super table
