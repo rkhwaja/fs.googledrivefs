@@ -24,3 +24,6 @@ requirements.txt
 .vs
 *.pyproj
 *.sln
+
+# misc
+ngrok.yml

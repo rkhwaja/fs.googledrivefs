@@ -128,6 +128,10 @@ class SubGoogleDriveFS(SubFS):
 		fs, targetPathDelegate = self.delegate_path(target_path)
 		fs.add_shortcut(shortcutPathDelegate, targetPathDelegate)
 
+	def watch(self, path, notificationAddress, expiration, id): # pylint: disable=redefined-builtin
+		fs, delegatePath = self.delegate_path(path)
+		fs.watch(delegatePath, notificationAddress, expiration, id)
+
 class GoogleDriveFS(FS):
 	subfs_class = SubGoogleDriveFS
 
@@ -156,19 +160,26 @@ class GoogleDriveFS(FS):
 		rawResults = self._fileQuery(condition())
 		return (self._infoFromMetadata(x) for x in rawResults)
 
-	def watch(self, path, notificationAddress, expiration, id):
+	def watch(self, path, notificationAddress, expiration, id): # pylint: disable=redefined-builtin
+		path = _CheckPath(path)
 		ids = self._itemsFromPath(path)
 		if path not in ids:
 			raise ResourceNotFound(path=path)
+		# TODO - check that we have a file, not a folder
 		# TODO - do we need resourceId, resourceUri, type?
+		# token is optional
+		# expiration time is optional
 		body = {
 			"kind": "api#channel",
+			"type": "web_hook",
 			"id": id,
 			"address": notificationAddress,
 		}
 		if expiration is not None:
-			body["expiration"] = expiration.timestamp()
-		result = self.drive.files().watch(ids[path], body=body)
+			# convert to ms
+			body["expiration"] = int(expiration.timestamp() * 1000)
+		_log.info(f"request body: {body}")
+		result = self.drive.files().watch(fileId=ids[path], body=body).execute(num_retries=self.retryCount)
 		_log.info(f"watch: {result}")
 
 	def _fileQuery(self, query):

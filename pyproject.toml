@@ -34,6 +34,8 @@ pyperclip = "^1.7"
 pylint = ">=2.5.3"
 pylint-quotes = "^0.2.1"
 pytest-cov = "^2.10.1"
+pyngrok = "^1.4"
+pytest-localserver = "^0.5.0"
 
 [tool.poetry.plugins] # Optional super table
 

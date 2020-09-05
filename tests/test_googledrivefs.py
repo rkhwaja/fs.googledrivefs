@@ -1,8 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from hashlib import md5
 from json import load, loads
+from logging import info
 from os import environ
+from time import sleep
 from unittest import TestCase, skipUnless
+from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
 import google.auth
@@ -14,6 +17,9 @@ from fs.opener import open_fs, registry
 from fs.path import join
 from fs.test import FSTestCases
 from fs.time import datetime_to_epoch
+from pyngrok.ngrok import connect # pylint: disable=wrong-import-order
+from pytest import fixture, mark # pylint: disable=wrong-import-order
+from pytest_localserver.http import WSGIServer # pylint: disable=wrong-import-order
 
 _safeDirForTests = '/test-googledrivefs'
 
@@ -38,6 +44,35 @@ def FullFS():
 
 	return GoogleDriveFS(credentials, environ.get('GOOGLEDRIVEFS_TEST_ROOT_ID', None))
 
+class simple_app: # pylint: disable=too-few-public-methods
+	def __init__(self):
+		self.notified = False
+
+	def __call__(self, environ_, start_response):
+		"""Simplest possible WSGI application"""
+		status = "200 OK"
+		response_headers = [("Content-type", "text/plain")]
+		start_response(status, response_headers)
+		parsedQS = parse_qs(environ_["REQUEST_URI"][2:])
+		info(f"Received: {parsedQS}")
+		info(f"env: {environ_}")
+		if "validationToken" in parsedQS:
+			info("Validating subscription")
+			return [parsedQS["validationToken"][0].encode()]
+		inputStream = environ_["wsgi.input"]
+		info(f"Input: {inputStream}")
+		info("NOTIFIED")
+		self.notified = True
+		return ""
+
+@fixture(scope="class")
+def testserver(request):
+	server = WSGIServer(application=simple_app())
+	request.cls.server = server
+	server.start()
+	request.addfinalizer(server.stop)
+	return server
+
 class TestGoogleDriveFS(FSTestCases, TestCase):
 	def make_fs(self):
 		self.fullFS = FullFS()
@@ -45,7 +80,39 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 		return self.fullFS.makedirs(self.testSubdir)
 
 	def destroy_fs(self, _):
-		self.fullFS.removetree(self.testSubdir)
+		pass #self.fullFS.removetree(self.testSubdir)
+
+	@mark.usefixtures("testserver")
+	def test_webhooks(self):
+		port = urlparse(self.server.url).port # pylint: disable=no-member
+		info(f"Port: {port}")
+		info(self.server.url) # pylint: disable=no-member
+		with open("ngrok.yml", "w") as f:
+			f.write(f"authtoken: {environ['NGROK_AUTH_TOKEN']}")
+		publicUrl = connect(proto="http", port=port, config_path="ngrok.yml").replace("http", "https")
+		info(f"publicUrl: {publicUrl}")
+
+		self.fs.touch("touched-file.txt")
+
+		expirationDateTime = datetime.now(timezone.utc) + timedelta(minutes=5)
+		subscriptionId = str(uuid4())
+		self.fs.watch("touched-file.txt", publicUrl, expirationDateTime, subscriptionId)
+		info(f"Watching {subscriptionId}")
+		# self.fs.touch("touched-file.txt")
+		with self.fs.open("touched-file.txt", "w") as f:
+			f.write("Some text")
+		info("Touched the file, waiting...")
+		# subscription = self.fs.update_subscription(subscription["id"], expirationDateTime + timedelta(hours=12))
+		# need to wait for some time for the notification to come through, but also process incoming http requests
+		for _ in range(10):
+			if self.server.app.notified is True: # pylint: disable=no-member
+				break
+			sleep(1)
+		# sleep(2)
+		# info("Sleep done, deleting subscription")
+		# self.fs.delete_subscription(id_)
+		# info("subscription deleted")
+		assert self.server.app.notified is True, f"Not notified: {self.server.app.notified}" # pylint: disable=no-member
 
 	def test_hashes(self):
 		self.fs.writebytes('file', b'xxxx')
