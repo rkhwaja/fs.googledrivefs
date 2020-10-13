@@ -5,4 +5,4 @@ def NameEquals(argument):
 	return lambda: f"name = '{argument}'"
 
 def And(argument1, argument2):
-	return lambda: f"({argument1()}) and ({argument2()})"
+	return lambda: f'({argument1()}) and ({argument2()})'

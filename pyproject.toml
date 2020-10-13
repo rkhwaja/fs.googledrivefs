@@ -37,7 +37,7 @@ load-plugins = "pylint_quotes"
 [tool.pylint.format]
 indent-string = "\t"
 max-line-length = "200"
-string-quote = "double"
+string-quote = "single-avoid-escape"
 
 [tool.pylint.messages_control]
 # no-member to remove false positives with objects constructed via google's discovery protocol
