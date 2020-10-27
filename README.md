@@ -1,6 +1,6 @@
 # fs.googledrivefs
 
-![image](https://github.com/rkhwaja/fs.googledrivefs/workflows/ci/badge.svg) [![Coverage report](https://coveralls.io/repos/github/rkhwaja/fs.googledrivefs/badge.svg?branch=master "Coverage summary")](https://coveralls.io/github/rkhwaja/fs.googledrivefs?branch=master) [![PyPI version](https://badge.fury.io/py/fs.googledrivefs.svg)](https://badge.fury.io/py/fs.googledrivefs)
+![image](https://github.com/rkhwaja/fs.googledrivefs/workflows/ci/badge.svg?branch=master) [![Coverage report](https://coveralls.io/repos/github/rkhwaja/fs.googledrivefs/badge.svg?branch=master "Coverage summary")](https://coveralls.io/github/rkhwaja/fs.googledrivefs?branch=master) [![PyPI version](https://badge.fury.io/py/fs.googledrivefs.svg)](https://badge.fury.io/py/fs.googledrivefs)
 
 Implementation of [pyfilesystem2](https://docs.pyfilesystem.org/) file system for Google Drive
 
