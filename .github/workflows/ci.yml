@@ -41,4 +41,9 @@ jobs:
         GOOGLEDRIVEFS_TEST_CLIENT_SECRET: ${{ secrets.GOOGLEDRIVEFS_TEST_CLIENT_SECRET }}
         GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY: ${{ secrets.GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY }}
       run: |
-        pytest --timeout=2700
+        pytest --cov=fs/googledrivefs --timeout=2700
+        coverage xml
+    - name: Coverage
+      uses: codecov/codecov-action@v1.0.7
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
