@@ -47,6 +47,12 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 	def destroy_fs(self, _):
 		self.fullFS.removetree(self.testSubdir)
 
+	def test_makedirs_bug(self):
+		for i in range(10):
+			parentDir = str(uuid4())
+			self.fs.makedir(parentDir)
+			self.fs.makedirs(f'{parentDir}/dir2/dir3', True)
+
 	def test_hashes(self):
 		self.fs.writebytes('file', b'xxxx')
 		expectedHash = md5(b'xxxx').hexdigest()
