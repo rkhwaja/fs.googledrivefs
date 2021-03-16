@@ -10,7 +10,7 @@ from google.oauth2.credentials import Credentials
 
 from fs.errors import DestinationExists, FileExpected, ResourceNotFound
 from fs.googledrivefs import And, GoogleDriveFS, GoogleDriveFSOpener, MimeTypeEquals, NameEquals, SubGoogleDriveFS
-from fs.opener import open_fs, registry
+from fs.opener import manage_fs, open_fs, registry
 from fs.path import join
 from fs.test import FSTestCases
 from fs.time import datetime_to_epoch
@@ -48,10 +48,10 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 		self.fullFS.removetree(self.testSubdir)
 
 	def test_makedirs_bug(self):
+		self.fs.makedir('parent')
 		for i in range(10):
 			parentDir = str(uuid4())
-			self.fs.makedir(parentDir)
-			self.fs.makedirs(f'{parentDir}/dir2/dir3', True)
+			self.fs.makedirs(f'parent/{parentDir}/dir2', True)
 
 	def test_hashes(self):
 		self.fs.writebytes('file', b'xxxx')
@@ -128,6 +128,28 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 def test_root():
 	fullFS = FullFS()
 	fullFS.listdir('/')
+
+def test_makedirs_root_bug():
+	fullFS = FullFS()
+	fullFS.makedir('test-googledrivefs/parent')
+	for i in range(100):
+		parentDir = str(uuid4())
+		fullFS.makedirs(f'test-googledrivefs/parent/{parentDir}/dir2', True)
+
+@skipUnless('GOOGLEDRIVEFS_TEST_CLIENT_ID' in environ, 'client id and secret required')
+def test_makedirs_root_bug_with_opener():
+	registry.install(GoogleDriveFSOpener())
+	client_id = environ['GOOGLEDRIVEFS_TEST_CLIENT_ID']
+	client_secret = environ['GOOGLEDRIVEFS_TEST_CLIENT_SECRET']
+	credentialsDict = CredentialsDict()
+	access_token = credentialsDict['access_token']
+	refresh_token = credentialsDict['refresh_token']
+
+	with manage_fs(f'googledrive:///?access_token={access_token}&refresh_token={refresh_token}&client_id={client_id}&client_secret={client_secret}') as fs:
+		fs.makedir('test-googledrivefs/parent')
+		for i in range(100):
+			parentDir = str(uuid4())
+			fs.makedirs(f'test-googledrivefs/parent/{parentDir}/dir2', True)
 
 def test_search():
 	fullFS = FullFS()
