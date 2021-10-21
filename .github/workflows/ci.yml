@@ -44,6 +44,4 @@ jobs:
         pytest --cov=fs/googledrivefs --timeout=2700
         coverage xml
     - name: Coverage
-      uses: codecov/codecov-action@v1.0.7
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
+      uses: codecov/codecov-action@v2.1.0
