@@ -129,12 +129,33 @@ class SubGoogleDriveFS(SubFS):
 class GoogleDriveFS(FS):
 	subfs_class = SubGoogleDriveFS
 
-	def __init__(self, credentials, rootId=None):
+	def __init__(self, credentials, rootId=None, driveId=None):
 		super().__init__()
 
 		self.drive = build('drive', 'v3', credentials=credentials, cache_discovery=False)
 		self.retryCount = 3
 		self.rootId = rootId
+		self.driveId = driveId
+
+		if self.driveId is not None:
+			# https://developers.google.com/drive/api/v3/enable-shareddrives
+			if self.rootId is None:
+				self.rootId = self.driveId
+			# for files.list calls
+			self._file_list_kwargs = {
+				'driveId': self.driveId,
+				'includeItemsFromAllDrives': True,
+				'corpora': 'drive',
+				'supportsAllDrives': True,
+			}
+			# for files.{get,create,update,copy,delete} calls
+			self._file_kwargs = {
+				'supportsAllDrives': True,
+			}
+		else:
+			# normal mode
+			self._file_list_kwargs = {}
+			self._file_kwargs = {}
 
 		_meta = self._meta = {
 			'case_insensitive': True, # it will even let you have 2 identical filenames in the same directory! But the search is case-insensitive
@@ -156,10 +177,19 @@ class GoogleDriveFS(FS):
 
 	def _fileQuery(self, query):
 		allFields = f'nextPageToken,files({_ALL_FIELDS})'
-		response = self.drive.files().list(q=query, fields=allFields).execute(num_retries=self.retryCount)
+		response = self.drive.files().list(
+			q=query,
+			fields=allFields,
+			**self._file_list_kwargs,
+		).execute(num_retries=self.retryCount)
 		result = response['files']
 		while 'nextPageToken' in response:
-			response = self.drive.files().list(q=query, fields=allFields, pageToken=response['nextPageToken']).execute(num_retries=self.retryCount)
+			response = self.drive.files().list(
+				q=query,
+				fields=allFields,
+				pageToken=response['nextPageToken'],
+				**self._file_list_kwargs,
+			).execute(num_retries=self.retryCount)
 			result.extend(response['files'])
 		return result
 
@@ -188,7 +218,11 @@ class GoogleDriveFS(FS):
 		if self.rootId is not None:
 			# if we have been given a `rootId` then get the info for this directory and set it as
 			# the root directory's metadata.
-			rootMetadata = self.drive.files().get(fileId=self.rootId, fields=_ALL_FIELDS).execute()
+			rootMetadata = self.drive.files().get(
+				fileId=self.rootId,
+				fields=_ALL_FIELDS,
+				**self._file_kwargs,
+			).execute()
 			if rootMetadata is None:
 				return pathIdMap
 			pathIdMap[''] = rootMetadata
