@@ -36,7 +36,11 @@ def FullFS():
 	else:
 		credentials, _ = google.auth.default()
 
-	return GoogleDriveFS(credentials, environ.get('GOOGLEDRIVEFS_TEST_ROOT_ID', None))
+	return GoogleDriveFS(
+		credentials,
+		rootId=environ.get('GOOGLEDRIVEFS_TEST_ROOT_ID'),
+		driveId=environ.get('GOOGLEDRIVEFS_TEST_DRIVE_ID'),
+	)
 
 class TestGoogleDriveFS(FSTestCases, TestCase):
 	def make_fs(self):
