@@ -8,7 +8,7 @@ from os.path import splitext
 from tempfile import mkstemp
 
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload, MediaIoBaseUpload
+from googleapiclient.http import DEFAULT_CHUNK_SIZE, MediaFileUpload, MediaIoBaseDownload, MediaIoBaseUpload
 from fs.base import FS
 from fs.enums import ResourceType
 from fs.errors import DestinationExists, DirectoryExists, DirectoryExpected, DirectoryNotEmpty, FileExists, FileExpected, InvalidCharsInPath, NoURL, ResourceNotFound, OperationFailed, RemoveRootError
@@ -59,10 +59,8 @@ class _UploadOnClose(RawWrapper):
 
 		if (self.parsedMode.reading or self.parsedMode.appending) and not self.parsedMode.truncate:
 			if self.thisMetadata is not None:
-				initialData = self.fs.drive.files().get_media(fileId=self.thisMetadata['id']).execute(num_retries=self.fs.retryCount)
-				_log.debug(f'Read initial data: {initialData}')
 				with open(self.localPath, 'wb') as f:
-					f.write(initialData)
+					self.fs._download_to_file(path, self.thisMetadata, f)
 		platformMode = self.parsedMode.to_platform()
 		platformMode += ('b' if 'b' not in platformMode else '')
 		platformMode = platformMode.replace('x', 'a')
@@ -365,6 +363,27 @@ class GoogleDriveFS(FS):
 			if parsedMode.writing and parentDirItem is None:
 				raise ResourceNotFound(parentDir)
 			return _UploadOnClose(fs=self, path=path, thisMetadata=item, parentMetadata=parentDirItem, parsedMode=parsedMode, **options)
+
+	def _download_to_file(self, path, metadata, file_obj, chunk_size=None):
+		_log.info('download %r', path)
+		assert metadata is not None
+		if chunk_size is None:
+			chunk_size = DEFAULT_CHUNK_SIZE
+		request = self.drive.files().get_media(fileId=metadata['id'])
+		downloader = MediaIoBaseDownload(file_obj, request, chunksize=chunk_size)
+		done = False
+		while not done:
+			status, done = downloader.next_chunk(num_retries=self.retryCount)
+			_log.debug('download status %r %s/%s bytes (%.1f%%)', path, status.resumable_progress,
+					   status.total_size, status.progress() * 100)
+
+	def download(self, path, file, chunk_size=None, **options):
+		path = _CheckPath(path)
+		with self._lock:
+			metadata = self._itemFromPath(path)
+			if metadata is None:
+				raise ResourceNotFound(path)
+			self._download_to_file(path, metadata, file, chunk_size=chunk_size)
 
 	def remove(self, path):
 		if path == '/':
