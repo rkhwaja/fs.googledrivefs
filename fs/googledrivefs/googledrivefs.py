@@ -276,7 +276,7 @@ class GoogleDriveFS(FS):
 			'sharing': {
 				'id': metadata['id'],
 				'permissions': permissions,
-				'is_shared': len(permissions) > 1 if permissions is not None else None
+				'is_shared': len(permissions) > 1 if permissions is not None else False
 			}
 		}
 		googleMetadata = {}
