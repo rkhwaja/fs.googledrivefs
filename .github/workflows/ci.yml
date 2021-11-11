@@ -12,8 +12,29 @@ on:
       - '*'
 
 jobs:
-  build:
 
+  secrets:
+    runs-on: ubuntu-latest
+    outputs:
+      valid: ${{ steps.check.outputs.valid }}
+    steps:
+      - name: Check for access to secrets
+        id: check
+        env:
+          GOOGLEDRIVEFS_TEST_CLIENT_ID: ${{ secrets.GOOGLEDRIVEFS_TEST_CLIENT_ID }}
+          GOOGLEDRIVEFS_TEST_CLIENT_SECRET: ${{ secrets.GOOGLEDRIVEFS_TEST_CLIENT_SECRET }}
+          GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY: ${{ secrets.GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY }}
+        run: |
+          valid=0
+          if [ ! -z "$GOOGLEDRIVEFS_TEST_CLIENT_ID" ] && [ ! -z "$GOOGLEDRIVEFS_TEST_CLIENT_SECRET" ] && [ ! -z "$GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY" ]
+          then
+            echo "Secrets are available"
+            valid=1
+          else
+            echo "Secrets are not available"
+          fi
+
+  build:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false      
@@ -40,6 +61,7 @@ jobs:
         GOOGLEDRIVEFS_TEST_CLIENT_ID: ${{ secrets.GOOGLEDRIVEFS_TEST_CLIENT_ID }}
         GOOGLEDRIVEFS_TEST_CLIENT_SECRET: ${{ secrets.GOOGLEDRIVEFS_TEST_CLIENT_SECRET }}
         GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY: ${{ secrets.GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY }}
+      if: ${{needs.secrets.outputs.valid}} == 'true'
       run: |
         pytest --cov=fs/googledrivefs --timeout=2700
         coverage xml
