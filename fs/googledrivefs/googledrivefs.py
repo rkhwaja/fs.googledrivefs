@@ -90,10 +90,19 @@ class _UploadOnClose(RawWrapper):
 				upload = MediaFileUpload(self.localPath, resumable=True)
 				if self.thisMetadata is None:
 					_log.debug('Creating new file')
-					request = self.fs.drive.files().create(body=uploadMetadata, media_body=upload)
+					request = self.fs.drive.files().create(
+						body=uploadMetadata,
+						media_body=upload,
+						**self.fs._file_kwargs,  # pylint: disable=protected-access
+					)
 				else:
 					_log.debug('Updating existing file')
-					request = self.fs.drive.files().update(fileId=self.thisMetadata['id'], body={}, media_body=upload)
+					request = self.fs.drive.files().update(
+						fileId=self.thisMetadata['id'],
+						body={},
+						media_body=upload,
+						**self.fs._file_kwargs,  # pylint: disable=protected-access
+					)
 
 				response = None
 				while response is None:
@@ -107,13 +116,17 @@ class _UploadOnClose(RawWrapper):
 				if self.thisMetadata is None:
 					createdFile = self.fs.drive.files().create(
 						body=uploadMetadata,
-						media_body=media).execute(num_retries=self.fs.retryCount)
+						media_body=media,
+						**self.fs._file_kwargs,  # pylint: disable=protected-access
+					).execute(num_retries=self.fs.retryCount)
 					_log.debug(f'Created empty file: {createdFile}')
 				else:
 					updatedFile = self.fs.drive.files().update(
 						fileId=self.thisMetadata['id'],
 						body={},
-						media_body=media).execute(num_retries=self.fs.retryCount)
+						media_body=media,
+						**self.fs._file_kwargs,  # pylint: disable=protected-access
+					).execute(num_retries=self.fs.retryCount)
 					_log.debug(f'Updated file to empty: {updatedFile}')
 		remove(self.localPath)
 
@@ -129,12 +142,33 @@ class SubGoogleDriveFS(SubFS):
 class GoogleDriveFS(FS):
 	subfs_class = SubGoogleDriveFS
 
-	def __init__(self, credentials, rootId=None):
+	def __init__(self, credentials, rootId=None, driveId=None):
 		super().__init__()
 
 		self.drive = build('drive', 'v3', credentials=credentials, cache_discovery=False)
 		self.retryCount = 3
 		self.rootId = rootId
+		self.driveId = driveId
+
+		if self.driveId is not None:
+			# https://developers.google.com/drive/api/v3/enable-shareddrives
+			if self.rootId is None:
+				self.rootId = self.driveId
+			# for files.list calls
+			self._file_list_kwargs = {
+				'driveId': self.driveId,
+				'includeItemsFromAllDrives': True,
+				'corpora': 'drive',
+				'supportsAllDrives': True,
+			}
+			# for files.{get,create,update,copy,delete} calls
+			self._file_kwargs = {
+				'supportsAllDrives': True,
+			}
+		else:
+			# normal mode
+			self._file_list_kwargs = {}
+			self._file_kwargs = {}
 
 		_meta = self._meta = {
 			'case_insensitive': True, # it will even let you have 2 identical filenames in the same directory! But the search is case-insensitive
@@ -156,10 +190,19 @@ class GoogleDriveFS(FS):
 
 	def _fileQuery(self, query):
 		allFields = f'nextPageToken,files({_ALL_FIELDS})'
-		response = self.drive.files().list(q=query, fields=allFields).execute(num_retries=self.retryCount)
+		response = self.drive.files().list(
+			q=query,
+			fields=allFields,
+			**self._file_list_kwargs,
+		).execute(num_retries=self.retryCount)
 		result = response['files']
 		while 'nextPageToken' in response:
-			response = self.drive.files().list(q=query, fields=allFields, pageToken=response['nextPageToken']).execute(num_retries=self.retryCount)
+			response = self.drive.files().list(
+				q=query,
+				fields=allFields,
+				pageToken=response['nextPageToken'],
+				**self._file_list_kwargs,
+			).execute(num_retries=self.retryCount)
 			result.extend(response['files'])
 		return result
 
@@ -188,7 +231,11 @@ class GoogleDriveFS(FS):
 		if self.rootId is not None:
 			# if we have been given a `rootId` then get the info for this directory and set it as
 			# the root directory's metadata.
-			rootMetadata = self.drive.files().get(fileId=self.rootId, fields=_ALL_FIELDS).execute()
+			rootMetadata = self.drive.files().get(
+				fileId=self.rootId,
+				fields=_ALL_FIELDS,
+				**self._file_kwargs,
+			).execute()
 			if rootMetadata is None:
 				return pathIdMap
 			pathIdMap[''] = rootMetadata
@@ -229,7 +276,7 @@ class GoogleDriveFS(FS):
 			'sharing': {
 				'id': metadata['id'],
 				'permissions': permissions,
-				'is_shared': len(permissions) > 1 if permissions is not None else None
+				'is_shared': len(permissions) > 1 if permissions is not None else False
 			}
 		}
 		googleMetadata = {}
@@ -272,7 +319,11 @@ class GoogleDriveFS(FS):
 						elif name == 'appProperties':
 							assert isinstance(value, dict)
 							updatedData['appProperties'] = value
-			self.drive.files().update(fileId=metadata['id'], body=updatedData).execute(num_retries=self.retryCount)
+			self.drive.files().update(
+				fileId=metadata['id'],
+				body=updatedData,
+				**self._file_kwargs,
+			).execute(num_retries=self.retryCount)
 
 	def share(self, path, email=None, role='reader'):
 		"""
@@ -323,7 +374,11 @@ class GoogleDriveFS(FS):
 
 	def _createSubdirectory(self, name, path, parents):
 		newMetadata = {'name': basename(name), 'parents': parents, 'mimeType': _folderMimeType, 'enforceSingleParent': True}
-		self.drive.files().create(body=newMetadata, fields='id').execute(num_retries=self.retryCount)
+		self.drive.files().create(
+			body=newMetadata,
+			fields='id',
+			**self._file_kwargs,
+		).execute(num_retries=self.retryCount)
 		return SubGoogleDriveFS(self, path)
 
 	def makedir(self, path, permissions=None, recreate=False):
@@ -396,7 +451,10 @@ class GoogleDriveFS(FS):
 				raise ResourceNotFound(path=path)
 			if metadata['mimeType'] == _folderMimeType:
 				raise FileExpected(path=path)
-			self.drive.files().delete(fileId=metadata['id']).execute(num_retries=self.retryCount)
+			self.drive.files().delete(
+				fileId=metadata['id'],
+				**self._file_kwargs,
+			).execute(num_retries=self.retryCount)
 
 	def removedir(self, path):
 		if path == '/':
@@ -412,7 +470,10 @@ class GoogleDriveFS(FS):
 			children = self._childrenById(metadata['id'])
 			if len(children) > 0:
 				raise DirectoryNotEmpty(path=path)
-			self.drive.files().delete(fileId=metadata['id']).execute(num_retries=self.retryCount)
+			self.drive.files().delete(
+				fileId=metadata['id'],
+				**self._file_kwargs,
+			).execute(num_retries=self.retryCount)
 
 	def _generateChildren(self, children, page):
 		if page:
@@ -460,10 +521,17 @@ class GoogleDriveFS(FS):
 
 			# TODO - we should really replace the contents of the existing file with the new contents, so that the history is correct
 			if dstItem is not None:
-				self.drive.files().delete(fileId=dstItem['id']).execute(num_retries=self.retryCount)
+				self.drive.files().delete(
+					fileId=dstItem['id'],
+					**self._file_kwargs,
+				).execute(num_retries=self.retryCount)
 
 			newMetadata = {'parents': [parentDirItem['id']], 'name': basename(dst_path), 'enforceSingleParent': True}
-			self.drive.files().copy(fileId=srcItem['id'], body=newMetadata).execute(num_retries=self.retryCount)
+			self.drive.files().copy(
+				fileId=srcItem['id'],
+				body=newMetadata,
+				**self._file_kwargs,
+			).execute(num_retries=self.retryCount)
 
 	# Non-essential - takes advantage of the file contents already being on the server
 	def move(self, src_path, dst_path, overwrite=False):
@@ -495,13 +563,18 @@ class GoogleDriveFS(FS):
 
 			if dstItem is not None:
 				assert overwrite is True
-				self.drive.files().delete(fileId=dstItem['id']).execute(num_retries=self.retryCount)
+				self.drive.files().delete(
+					fileId=dstItem['id'],
+					**self._file_kwargs,
+				).execute(num_retries=self.retryCount)
 
 			self.drive.files().update(
 				fileId=srcItem['id'],
 				addParents=dstParentDirItem['id'],
 				removeParents=srcParentItem['id'],
-				body={'name': basename(dst_path), 'enforceSingleParent': True}).execute(num_retries=self.retryCount)
+				body={'name': basename(dst_path), 'enforceSingleParent': True},
+				**self._file_kwargs,
+			).execute(num_retries=self.retryCount)
 
 	def add_shortcut(self, shortcut_path, target_path):
 		_log.info(f'add_shortcut: {shortcut_path}, {target_path}')
@@ -536,4 +609,8 @@ class GoogleDriveFS(FS):
 				'enforceSingleParent': True
 			}
 
-			_ = self.drive.files().create(body=metadata, fields='id').execute(num_retries=self.retryCount)
+			_ = self.drive.files().create(
+				body=metadata,
+				fields='id',
+				**self._file_kwargs,
+			).execute(num_retries=self.retryCount)

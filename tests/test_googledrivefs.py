@@ -3,6 +3,7 @@ from hashlib import md5
 from json import load, loads
 from os import environ
 from unittest import TestCase, skipUnless
+from urllib.parse import urlencode
 from uuid import uuid4
 
 import google.auth
@@ -36,7 +37,11 @@ def FullFS():
 	else:
 		credentials, _ = google.auth.default()
 
-	return GoogleDriveFS(credentials, environ.get('GOOGLEDRIVEFS_TEST_ROOT_ID', None))
+	return GoogleDriveFS(
+		credentials,
+		rootId=environ.get('GOOGLEDRIVEFS_TEST_ROOT_ID'),
+		driveId=environ.get('GOOGLEDRIVEFS_TEST_DRIVE_ID'),
+	)
 
 class TestGoogleDriveFS(FSTestCases, TestCase):
 	def make_fs(self):
@@ -196,14 +201,17 @@ def test_opener():
 def test_opener_with_root_id():
 	# (default credentials are used for authentication)
 
-	root_id = environ['GOOGLEDRIVEFS_TEST_ROOT_ID']
+	params = {'root_id': environ['GOOGLEDRIVEFS_TEST_ROOT_ID']}
+	if 'GOOGLEDRIVEFS_TEST_DRIVE_ID' in environ:
+		params['drive_id'] = environ['GOOGLEDRIVEFS_TEST_DRIVE_ID']
+	query = urlencode(params)
 
 	# Without the initial "/" character, it should still be assumed to relative to the root
-	fs = open_fs(f'googledrive://test-googledrivefs?root_id={root_id}')
+	fs = open_fs(f'googledrive://test-googledrivefs?{query}')
 	assert isinstance(fs, SubGoogleDriveFS), str(fs)
 	assert fs._sub_dir == '/test-googledrivefs' # pylint: disable=protected-access
 
 	# It should still accept the initial "/" character
-	fs = open_fs(f'googledrive:///test-googledrivefs?root_id={root_id}')
+	fs = open_fs(f'googledrive:///test-googledrivefs?{query}')
 	assert isinstance(fs, SubGoogleDriveFS), str(fs)
 	assert fs._sub_dir == '/test-googledrivefs' # pylint: disable=protected-access
