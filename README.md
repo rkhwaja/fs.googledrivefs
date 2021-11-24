@@ -1,6 +1,6 @@
 # fs.googledrivefs
 
-![image](https://github.com/rkhwaja/fs.googledrivefs/workflows/ci/badge.svg?branch=master) [![codecov](https://codecov.io/gh/rkhwaja/fs.googledrivefs/branch/master/graph/badge.svg)](https://codecov.io/gh/rkhwaja/fs.googledrivefs) [![PyPI version](https://badge.fury.io/py/fs.googledrivefs.svg)](https://badge.fury.io/py/fs.googledrivefs)
+[![codecov](https://codecov.io/gh/rkhwaja/fs.googledrivefs/branch/master/graph/badge.svg)](https://codecov.io/gh/rkhwaja/fs.googledrivefs) [![PyPI version](https://badge.fury.io/py/fs.googledrivefs.svg)](https://badge.fury.io/py/fs.googledrivefs)
 
 Implementation of [pyfilesystem2](https://docs.pyfilesystem.org/) file system for Google Drive
 
