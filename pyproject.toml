@@ -24,7 +24,7 @@ classifiers = [
 [tool.poetry.dependencies]
 python = ">=3.6"
 fs = ">=2.4.13"
-google-api-python-client = ">=1.6.3"
+google-api-python-client = ">=1.7.10"
 google-auth = ">=1.5.1"
 
 [tool.poetry.dev-dependencies]
