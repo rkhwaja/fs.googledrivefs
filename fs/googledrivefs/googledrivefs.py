@@ -8,6 +8,7 @@ from os.path import splitext
 from tempfile import mkstemp
 
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from googleapiclient.http import DEFAULT_CHUNK_SIZE, MediaFileUpload, MediaIoBaseDownload, MediaIoBaseUpload
 from fs.base import FS
 from fs.enums import ResourceType
@@ -60,7 +61,7 @@ class _UploadOnClose(RawWrapper):
 		if (self.parsedMode.reading or self.parsedMode.appending) and not self.parsedMode.truncate:
 			if self.thisMetadata is not None:
 				with open(self.localPath, 'wb') as f:
-					self.fs._download_to_file(path, self.thisMetadata, f)
+					self.fs._download_to_file(path, self.thisMetadata, f, DEFAULT_CHUNK_SIZE)
 		platformMode = self.parsedMode.to_platform()
 		platformMode += ('b' if 'b' not in platformMode else '')
 		platformMode = platformMode.replace('x', 'a')
@@ -90,14 +91,14 @@ class _UploadOnClose(RawWrapper):
 				upload = MediaFileUpload(self.localPath, resumable=True)
 				if self.thisMetadata is None:
 					_log.debug('Creating new file')
-					request = self.fs.drive.files().create(
+					request = self.fs.google_resource().files().create(
 						body=uploadMetadata,
 						media_body=upload,
 						**self.fs._file_kwargs,  # pylint: disable=protected-access
 					)
 				else:
 					_log.debug('Updating existing file')
-					request = self.fs.drive.files().update(
+					request = self.fs.google_resource().files().update(
 						fileId=self.thisMetadata['id'],
 						body={},
 						media_body=upload,
@@ -114,14 +115,14 @@ class _UploadOnClose(RawWrapper):
 				fh = BytesIO(b'')
 				media = MediaIoBaseUpload(fh, mimetype='application/octet-stream', chunksize=-1, resumable=False)
 				if self.thisMetadata is None:
-					createdFile = self.fs.drive.files().create(
+					createdFile = self.fs.google_resource().files().create(
 						body=uploadMetadata,
 						media_body=media,
 						**self.fs._file_kwargs,  # pylint: disable=protected-access
 					).execute(num_retries=self.fs.retryCount)
 					_log.debug(f'Created empty file: {createdFile}')
 				else:
-					updatedFile = self.fs.drive.files().update(
+					updatedFile = self.fs.google_resource().files().update(
 						fileId=self.thisMetadata['id'],
 						body={},
 						media_body=media,
@@ -134,6 +135,9 @@ class SubGoogleDriveFS(SubFS):
 	def __repr__(self):
 		return '<SubGoogleDriveFS>'
 
+	def google_resource(self):
+		return self._wrap_fs.google_resource()
+
 	def add_shortcut(self, shortcut_path, target_path):
 		fs, shortcutPathDelegate = self.delegate_path(shortcut_path)
 		fs, targetPathDelegate = self.delegate_path(target_path)
@@ -145,7 +149,7 @@ class GoogleDriveFS(FS):
 	def __init__(self, credentials, rootId=None, driveId=None):
 		super().__init__()
 
-		self.drive = build('drive', 'v3', credentials=credentials, cache_discovery=False)
+		self._drive = build('drive', 'v3', credentials=credentials, cache_discovery=False)
 		self.retryCount = 3
 		self.rootId = rootId
 		self.driveId = driveId
@@ -183,6 +187,9 @@ class GoogleDriveFS(FS):
 	def __repr__(self):
 		return '<GoogleDriveFS>'
 
+	def google_resource(self):
+		return self._drive
+
 	def search(self, condition):
 		_log.info(f'search: {condition()}')
 		rawResults = self._fileQuery(condition())
@@ -190,14 +197,14 @@ class GoogleDriveFS(FS):
 
 	def _fileQuery(self, query):
 		allFields = f'nextPageToken,files({_ALL_FIELDS})'
-		response = self.drive.files().list(
+		response = self._drive.files().list(
 			q=query,
 			fields=allFields,
 			**self._file_list_kwargs,
 		).execute(num_retries=self.retryCount)
 		result = response['files']
 		while 'nextPageToken' in response:
-			response = self.drive.files().list(
+			response = self._drive.files().list(
 				q=query,
 				fields=allFields,
 				pageToken=response['nextPageToken'],
@@ -231,7 +238,7 @@ class GoogleDriveFS(FS):
 		if self.rootId is not None:
 			# if we have been given a `rootId` then get the info for this directory and set it as
 			# the root directory's metadata.
-			rootMetadata = self.drive.files().get(
+			rootMetadata = self._drive.files().get(
 				fileId=self.rootId,
 				fields=_ALL_FIELDS,
 				**self._file_kwargs,
@@ -319,7 +326,7 @@ class GoogleDriveFS(FS):
 						elif name == 'appProperties':
 							assert isinstance(value, dict)
 							updatedData['appProperties'] = value
-			self.drive.files().update(
+			self._drive.files().update(
 				fileId=metadata['id'],
 				body=updatedData,
 				**self._file_kwargs,
@@ -344,7 +351,7 @@ class GoogleDriveFS(FS):
 				permissions = {'role': role, 'type': 'user', 'emailAddress': email}
 			else:
 				permissions = {'role': role, 'type': 'anyone'}
-			self.drive.permissions().create(fileId=metadata['id'], body=permissions).execute(num_retries=self.retryCount)
+			self._drive.permissions().create(fileId=metadata['id'], body=permissions).execute(num_retries=self.retryCount)
 			return self.geturl(path)
 
 	def hasurl(self, path, purpose='download'):
@@ -374,7 +381,7 @@ class GoogleDriveFS(FS):
 
 	def _createSubdirectory(self, name, path, parents):
 		newMetadata = {'name': basename(name), 'parents': parents, 'mimeType': _folderMimeType, 'enforceSingleParent': True}
-		self.drive.files().create(
+		self._drive.files().create(
 			body=newMetadata,
 			fields='id',
 			**self._file_kwargs,
@@ -419,26 +426,40 @@ class GoogleDriveFS(FS):
 				raise ResourceNotFound(parentDir)
 			return _UploadOnClose(fs=self, path=path, thisMetadata=item, parentMetadata=parentDirItem, parsedMode=parsedMode, **options)
 
-	def _download_to_file(self, path, metadata, file_obj, chunk_size=None):
+	def _download_to_file(self, path, metadata, file_obj, chunk_size):
 		_log.info('download %r', path)
 		assert metadata is not None
-		if chunk_size is None:
-			chunk_size = DEFAULT_CHUNK_SIZE
-		request = self.drive.files().get_media(fileId=metadata['id'])
+		request = self._drive.files().get_media(fileId=metadata['id'])
+		self._download_request(path, request, file_obj, chunk_size)
+
+	def _export_as(self, path, metadata, file_obj, chunk_size, mimeType): # pylint: disable=too-many-arguments
+		assert metadata is not None
+		request = self._drive.files().export_media(fileId=metadata['id'], mimeType=mimeType)
+		self._download_request(path, request, file_obj, chunk_size)
+
+	def _download_request(self, path, request, file_obj, chunk_size):
 		downloader = MediaIoBaseDownload(file_obj, request, chunksize=chunk_size)
 		done = False
 		while not done:
-			status, done = downloader.next_chunk(num_retries=self.retryCount)
-			_log.debug('download status %r %s/%s bytes (%.1f%%)', path, status.resumable_progress,
-					   status.total_size, status.progress() * 100)
+			try:
+				status, done = downloader.next_chunk(num_retries=self.retryCount)
+			except HttpError as e:
+				raise OperationFailed(path) from e
+			_log.debug('download status %r %s/%s bytes (%.1f%%)', path, status.resumable_progress, status.total_size, status.progress() * 100)
 
 	def download(self, path, file, chunk_size=None, **options):
 		path = _CheckPath(path)
+		if chunk_size is None:
+			chunk_size = DEFAULT_CHUNK_SIZE
 		with self._lock:
 			metadata = self._itemFromPath(path)
 			if metadata is None:
 				raise ResourceNotFound(path)
-			self._download_to_file(path, metadata, file, chunk_size=chunk_size)
+			mimeTypeOption = 'mimetype'
+			if mimeTypeOption in options:
+				self._export_as(path, metadata, file, chunk_size, options[mimeTypeOption])
+			else:
+				self._download_to_file(path, metadata, file, chunk_size)
 
 	def remove(self, path):
 		if path == '/':
@@ -451,7 +472,7 @@ class GoogleDriveFS(FS):
 				raise ResourceNotFound(path=path)
 			if metadata['mimeType'] == _folderMimeType:
 				raise FileExpected(path=path)
-			self.drive.files().delete(
+			self._drive.files().delete(
 				fileId=metadata['id'],
 				**self._file_kwargs,
 			).execute(num_retries=self.retryCount)
@@ -470,7 +491,7 @@ class GoogleDriveFS(FS):
 			children = self._childrenById(metadata['id'])
 			if len(children) > 0:
 				raise DirectoryNotEmpty(path=path)
-			self.drive.files().delete(
+			self._drive.files().delete(
 				fileId=metadata['id'],
 				**self._file_kwargs,
 			).execute(num_retries=self.retryCount)
@@ -521,7 +542,7 @@ class GoogleDriveFS(FS):
 
 			# TODO - we should really replace the contents of the existing file with the new contents, so that the history is correct
 			if dstItem is not None:
-				self.drive.files().delete(
+				self._drive.files().delete(
 					fileId=dstItem['id'],
 					**self._file_kwargs,
 				).execute(num_retries=self.retryCount)
@@ -531,7 +552,7 @@ class GoogleDriveFS(FS):
 			if preserve_time is True:
 				newMetadata['modifiedTime'] = srcItem['modifiedTime']
 
-			self.drive.files().copy(
+			self._drive.files().copy(
 				fileId=srcItem['id'],
 				body=newMetadata,
 				**self._file_kwargs,
@@ -567,7 +588,7 @@ class GoogleDriveFS(FS):
 
 			if dstItem is not None:
 				assert overwrite is True
-				self.drive.files().delete(
+				self._drive.files().delete(
 					fileId=dstItem['id'],
 					**self._file_kwargs,
 				).execute(num_retries=self.retryCount)
@@ -577,7 +598,7 @@ class GoogleDriveFS(FS):
 			if preserve_time is True:
 				metadata['modifiedTime'] = srcItem['modifiedTime']
 
-			self.drive.files().update(
+			self._drive.files().update(
 				fileId=srcItem['id'],
 				addParents=dstParentDirItem['id'],
 				removeParents=srcParentItem['id'],
@@ -618,7 +639,7 @@ class GoogleDriveFS(FS):
 				'enforceSingleParent': True
 			}
 
-			_ = self.drive.files().create(
+			_ = self._drive.files().create(
 				body=metadata,
 				fields='id',
 				**self._file_kwargs,
