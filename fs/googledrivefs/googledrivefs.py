@@ -497,7 +497,7 @@ class GoogleDriveFS(FS):
 			return self._generateChildren(children, page)
 
 	# Non-essential - takes advantage of the file contents are already being on the server
-	def copy(self, src_path, dst_path, overwrite=False):
+	def copy(self, src_path, dst_path, overwrite=False, preserve_time=False):
 		_log.info(f'copy: {src_path} -> {dst_path}, {overwrite}')
 		src_path = _CheckPath(src_path)
 		dst_path = _CheckPath(dst_path)
@@ -527,6 +527,10 @@ class GoogleDriveFS(FS):
 				).execute(num_retries=self.retryCount)
 
 			newMetadata = {'parents': [parentDirItem['id']], 'name': basename(dst_path), 'enforceSingleParent': True}
+
+			if preserve_time is True:
+				newMetadata['modifiedTime'] = srcItem['modifiedTime']
+
 			self.drive.files().copy(
 				fileId=srcItem['id'],
 				body=newMetadata,
@@ -534,7 +538,7 @@ class GoogleDriveFS(FS):
 			).execute(num_retries=self.retryCount)
 
 	# Non-essential - takes advantage of the file contents already being on the server
-	def move(self, src_path, dst_path, overwrite=False):
+	def move(self, src_path, dst_path, overwrite=False, preserve_time=False):
 		_log.info(f'move: {src_path} -> {dst_path}, {overwrite}')
 		src_path = _CheckPath(src_path)
 		dst_path = _CheckPath(dst_path)
@@ -568,11 +572,16 @@ class GoogleDriveFS(FS):
 					**self._file_kwargs,
 				).execute(num_retries=self.retryCount)
 
+			metadata = {'name': basename(dst_path), 'enforceSingleParent': True}
+
+			if preserve_time is True:
+				metadata['modifiedTime'] = srcItem['modifiedTime']
+
 			self.drive.files().update(
 				fileId=srcItem['id'],
 				addParents=dstParentDirItem['id'],
 				removeParents=srcParentItem['id'],
-				body={'name': basename(dst_path), 'enforceSingleParent': True},
+				body=metadata,
 				**self._file_kwargs,
 			).execute(num_retries=self.retryCount)
 
