@@ -3,7 +3,7 @@ name = "fs.googledrivefs"
 packages = [
     { include = "fs"}
 ]
-version = "2.1.0"
+version = "2.1.1"
 description = "Pyfilesystem2 implementation for Google Drive"
 authors = ["Rehan Khwaja <rehan@khwaja.name>"]
 license = "MIT"
@@ -23,7 +23,7 @@ classifiers = [
 
 [tool.poetry.dependencies]
 python = ">=3.6"
-fs = ">=2.4.10"
+fs = ">=2.4.10,<2.4.13"
 google-api-python-client = ">=1.6.3"
 google-auth = ">=1.5.1"
 
