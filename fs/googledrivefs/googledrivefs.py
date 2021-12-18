@@ -284,7 +284,7 @@ class GoogleDriveFS(FS):
 				break
 
 			pathIdMap[pathSoFar] = metadata
-			parentId = metadata['id'] # pylint: disable=unsubscriptable-object
+			parentId = metadata['id']
 
 		return pathIdMap
 
@@ -292,7 +292,7 @@ class GoogleDriveFS(FS):
 		pathIdMap = self._itemsFromPath(path)
 		return pathIdMap.get(path)
 
-	def getinfo(self, path, namespaces=None):  # pylint: disable=unused-argument
+	def getinfo(self, path, namespaces=None):
 		path = self.validatepath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
@@ -300,7 +300,7 @@ class GoogleDriveFS(FS):
 				raise ResourceNotFound(path=path)
 			return _InfoFromMetadata(metadata)
 
-	def setinfo(self, path, info):  # pylint: disable=redefined-outer-name,too-many-branches
+	def setinfo(self, path, info):
 		path = self.validatepath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
