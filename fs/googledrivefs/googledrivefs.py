@@ -32,6 +32,47 @@ def _Escape(name):
 	name = name.replace("'", r"\'")
 	return name
 
+def _InfoFromMetadata(metadata):
+	isRoot = (metadata == _rootMetadata)
+	isFolder = (metadata['mimeType'] == _folderMimeType)
+	rfc3339 = '%Y-%m-%dT%H:%M:%S.%fZ'
+	permissions = metadata.get('permissions', None)
+	rawInfo = {
+		'basic': {
+			'name': '' if isRoot else metadata['name'],
+			'is_dir': isFolder
+		},
+		'details': {
+			'accessed': None,  # not supported by Google Drive API
+			'created': None if isRoot else datetime_to_epoch(datetime.strptime(metadata['createdTime'], rfc3339)),
+			'metadata_changed': None,  # not supported by Google Drive API
+			'modified': None if isRoot else datetime_to_epoch(datetime.strptime(metadata['modifiedTime'], rfc3339)),
+			'size': int(metadata['size']) if 'size' in metadata else None, # folders, native google documents etc have no size
+			'type': ResourceType.directory if isFolder else ResourceType.file
+		},
+		'sharing': {
+			'id': metadata['id'],
+			'permissions': permissions,
+			'is_shared': len(permissions) > 1 if permissions is not None else False
+		}
+	}
+	googleMetadata = {}
+	if 'contentHints' in metadata and 'indexableText' in metadata['contentHints']:
+		googleMetadata.update({'indexableText': metadata['contentHints']['indexableText']})
+	if 'appProperties' in metadata:
+		googleMetadata.update({'appProperties': metadata['appProperties']})
+	if 'md5Checksum' in metadata:
+		rawInfo.update({'hashes': {'MD5': metadata['md5Checksum']}})
+	if 'mimeType' in metadata:
+		googleMetadata.update({'isShortcut': metadata['mimeType'] == _shortcutMimeType})
+	rawInfo.update({'google': googleMetadata})
+	# there is also file-type-specific metadata like imageMediaMetadata
+	return Info(rawInfo)
+
+def _GenerateChildren(children, page):
+	if page:
+		return (_InfoFromMetadata(x) for x in children[page[0]:page[1]])
+	return (_InfoFromMetadata(x) for x in children)
 
 # TODO - switch to MediaIoBaseUpload and use BytesIO
 class _UploadOnClose(RawWrapper):
@@ -182,7 +223,7 @@ class GoogleDriveFS(FS):
 	def search(self, condition):
 		_log.info(f'search: {condition()}')
 		rawResults = self._fileQuery(condition())
-		return (self._infoFromMetadata(x) for x in rawResults)
+		return (_InfoFromMetadata(x) for x in rawResults)
 
 	def _fileQuery(self, query):
 		allFields = f'nextPageToken,files({_ALL_FIELDS})'
@@ -251,52 +292,14 @@ class GoogleDriveFS(FS):
 		pathIdMap = self._itemsFromPath(path)
 		return pathIdMap.get(path)
 
-	def _infoFromMetadata(self, metadata):  # pylint: disable=no-self-use
-		isRoot = (metadata == _rootMetadata)
-		isFolder = (metadata['mimeType'] == _folderMimeType)
-		rfc3339 = '%Y-%m-%dT%H:%M:%S.%fZ'
-		permissions = metadata.get('permissions', None)
-		rawInfo = {
-			'basic': {
-				'name': '' if isRoot else metadata['name'],
-				'is_dir': isFolder
-			},
-			'details': {
-				'accessed': None,  # not supported by Google Drive API
-				'created': None if isRoot else datetime_to_epoch(datetime.strptime(metadata['createdTime'], rfc3339)),
-				'metadata_changed': None,  # not supported by Google Drive API
-				'modified': None if isRoot else datetime_to_epoch(datetime.strptime(metadata['modifiedTime'], rfc3339)),
-				'size': int(metadata['size']) if 'size' in metadata else None, # folders, native google documents etc have no size
-				'type': ResourceType.directory if isFolder else ResourceType.file
-			},
-			'sharing': {
-				'id': metadata['id'],
-				'permissions': permissions,
-				'is_shared': len(permissions) > 1 if permissions is not None else False
-			}
-		}
-		googleMetadata = {}
-		if 'contentHints' in metadata and 'indexableText' in metadata['contentHints']:
-			googleMetadata.update({'indexableText': metadata['contentHints']['indexableText']})
-		if 'appProperties' in metadata:
-			googleMetadata.update({'appProperties': metadata['appProperties']})
-		if 'md5Checksum' in metadata:
-			rawInfo.update({'hashes': {'MD5': metadata['md5Checksum']}})
-		if 'mimeType' in metadata:
-			googleMetadata.update({'isShortcut': metadata['mimeType'] == _shortcutMimeType})
-		rawInfo.update({'google': googleMetadata})
-		# there is also file-type-specific metadata like imageMediaMetadata
-		return Info(rawInfo)
-
 	def getinfo(self, path, namespaces=None):  # pylint: disable=unused-argument
 		path = self.validatepath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
 			if metadata is None:
 				raise ResourceNotFound(path=path)
-			return self._infoFromMetadata(metadata)
+			return _InfoFromMetadata(metadata)
 
-	def setinfo(self, path, info):  # pylint: disable=redefined-outer-name,too-many-branches,unused-argument
 	def setinfo(self, path, info):  # pylint: disable=redefined-outer-name,too-many-branches
 		path = self.validatepath(path)
 		with self._lock:
@@ -354,7 +357,6 @@ class GoogleDriveFS(FS):
 			except ResourceNotFound:
 				return False
 
-	def geturl(self, path, purpose='download'): # pylint: disable=unused-argument
 	def geturl(self, path, purpose='download'):
 		path = self.validatepath(path)
 		if purpose != 'download':
@@ -396,7 +398,6 @@ class GoogleDriveFS(FS):
 
 			return self._createSubdirectory(basename(path), path, [parentMetadata['id']])
 
-	def openbin(self, path, mode='r', buffering=-1, **options):  # pylint: disable=unused-argument
 	def openbin(self, path, mode='r', buffering=-1, **options):
 		path = self.validatepath(path)
 		with self._lock:
@@ -488,11 +489,6 @@ class GoogleDriveFS(FS):
 				**self._file_kwargs,
 			).execute(num_retries=self.retryCount)
 
-	def _generateChildren(self, children, page):
-		if page:
-			return (self._infoFromMetadata(x) for x in children[page[0]:page[1]])
-		return (self._infoFromMetadata(x) for x in children)
-
 	# Non-essential method - for speeding up walk
 	# Takes advantage of the fact that you get the full metadata for all children in one call
 	def scandir(self, path, namespaces=None, page=None):
@@ -507,7 +503,7 @@ class GoogleDriveFS(FS):
 				raise DirectoryExpected(path=path)
 
 			children = self._childrenById(metadata['id'])
-			return self._generateChildren(children, page)
+			return _GenerateChildren(children, page)
 
 	# Non-essential - takes advantage of the file contents are already being on the server
 	def copy(self, src_path, dst_path, overwrite=False, preserve_time=False):
