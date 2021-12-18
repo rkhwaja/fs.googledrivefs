@@ -3,7 +3,7 @@ name = "fs.googledrivefs"
 packages = [
     { include = "fs"}
 ]
-version = "2.2.0"
+version = "2.3.0"
 description = "Pyfilesystem2 implementation for Google Drive"
 authors = ["Rehan Khwaja <rehan@khwaja.name>"]
 license = "MIT"

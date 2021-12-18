@@ -1,20 +1,22 @@
 from datetime import datetime
 from hashlib import md5
+from io import BytesIO
 from json import load, loads
 from os import environ
 from unittest import TestCase, skipUnless
 from urllib.parse import urlencode
 from uuid import uuid4
+from zipfile import ZipFile
 
-import google.auth
-from google.oauth2.credentials import Credentials
-
-from fs.errors import DestinationExists, FileExpected, ResourceNotFound
+from fs.errors import DestinationExists, FileExpected, OperationFailed, ResourceNotFound
 from fs.googledrivefs import And, GoogleDriveFS, GoogleDriveFSOpener, MimeTypeEquals, NameEquals, SubGoogleDriveFS
 from fs.opener import open_fs, registry
 from fs.path import join
 from fs.test import FSTestCases
 from fs.time import datetime_to_epoch
+from google.auth import default # pylint: disable=wrong-import-order
+from google.oauth2.credentials import Credentials # pylint: disable=wrong-import-order
+from pytest import raises # pylint: disable=wrong-import-order
 
 _safeDirForTests = '/test-googledrivefs'
 
@@ -35,7 +37,7 @@ def FullFS():
 			client_id=environ['GOOGLEDRIVEFS_TEST_CLIENT_ID'],
 			client_secret=environ['GOOGLEDRIVEFS_TEST_CLIENT_SECRET'])
 	else:
-		credentials, _ = google.auth.default()
+		credentials, _ = default()
 
 	return GoogleDriveFS(
 		credentials,
@@ -123,6 +125,19 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 		self.fs.setinfo(filename, {'google': {'appProperties': {'a': None}}})
 		info_ = self.fs.getinfo(filename)
 		self.assertIsNone(info_.get('google', 'appProperties'))
+
+	def test_download_google_native_format(self):
+		id_ = self.fs.getinfo('').get('sharing', 'id')
+		body = {'mimeType': 'application/vnd.google-apps.spreadsheet', 'name': 'test-spreadsheet', 'parents': [id_]}
+		self.fs.google_resource().files().create(body=body).execute()
+		with BytesIO() as f:
+			with raises(OperationFailed):
+				self.fs.download('test-spreadsheet', f)
+		with BytesIO() as f:
+			self.fs.download('test-spreadsheet', f, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+			f.seek(0)
+			zipfile = ZipFile(f)
+			assert '[Content_Types].xml' in zipfile.namelist()
 
 def test_root():
 	fullFS = FullFS()
