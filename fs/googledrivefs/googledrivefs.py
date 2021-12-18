@@ -12,7 +12,7 @@ from googleapiclient.errors import HttpError
 from googleapiclient.http import DEFAULT_CHUNK_SIZE, MediaFileUpload, MediaIoBaseDownload, MediaIoBaseUpload
 from fs.base import FS
 from fs.enums import ResourceType
-from fs.errors import DestinationExists, DirectoryExists, DirectoryExpected, DirectoryNotEmpty, FileExists, FileExpected, InvalidCharsInPath, NoURL, ResourceNotFound, OperationFailed, RemoveRootError
+from fs.errors import DestinationExists, DirectoryExists, DirectoryExpected, DirectoryNotEmpty, FileExists, FileExpected, NoURL, ResourceNotFound, OperationFailed, RemoveRootError
 from fs.info import Info
 from fs.iotools import RawWrapper
 from fs.mode import Mode
@@ -20,11 +20,9 @@ from fs.path import basename, dirname, iteratepath, join, split
 from fs.subfs import SubFS
 from fs.time import datetime_to_epoch, epoch_to_datetime
 
-_fileMimeType = 'application/vnd.google-apps.file'
 _folderMimeType = 'application/vnd.google-apps.folder'
 _shortcutMimeType = 'application/vnd.google-apps.shortcut'
 _sharingUrl = 'https://drive.google.com/open?id='
-_INVALID_PATH_CHARS = ':\0'
 _log = getLogger('fs.googledrivefs')
 _rootMetadata = {'id': 'root', 'mimeType': _folderMimeType}
 _ALL_FIELDS = 'id,mimeType,kind,name,createdTime,modifiedTime,size,permissions,appProperties,contentHints,md5Checksum'
@@ -34,13 +32,47 @@ def _Escape(name):
 	name = name.replace("'", r"\'")
 	return name
 
-def _CheckPath(path):
-	for char in _INVALID_PATH_CHARS:
-		if char in path:
-			raise InvalidCharsInPath(path)
-	if path.startswith('/'):
-		return path[1:]
-	return path
+def _InfoFromMetadata(metadata):
+	isRoot = (metadata == _rootMetadata)
+	isFolder = (metadata['mimeType'] == _folderMimeType)
+	rfc3339 = '%Y-%m-%dT%H:%M:%S.%fZ'
+	permissions = metadata.get('permissions', None)
+	rawInfo = {
+		'basic': {
+			'name': '' if isRoot else metadata['name'],
+			'is_dir': isFolder
+		},
+		'details': {
+			'accessed': None,  # not supported by Google Drive API
+			'created': None if isRoot else datetime_to_epoch(datetime.strptime(metadata['createdTime'], rfc3339)),
+			'metadata_changed': None,  # not supported by Google Drive API
+			'modified': None if isRoot else datetime_to_epoch(datetime.strptime(metadata['modifiedTime'], rfc3339)),
+			'size': int(metadata['size']) if 'size' in metadata else None, # folders, native google documents etc have no size
+			'type': ResourceType.directory if isFolder else ResourceType.file
+		},
+		'sharing': {
+			'id': metadata['id'],
+			'permissions': permissions,
+			'is_shared': len(permissions) > 1 if permissions is not None else False
+		}
+	}
+	googleMetadata = {}
+	if 'contentHints' in metadata and 'indexableText' in metadata['contentHints']:
+		googleMetadata.update({'indexableText': metadata['contentHints']['indexableText']})
+	if 'appProperties' in metadata:
+		googleMetadata.update({'appProperties': metadata['appProperties']})
+	if 'md5Checksum' in metadata:
+		rawInfo.update({'hashes': {'MD5': metadata['md5Checksum']}})
+	if 'mimeType' in metadata:
+		googleMetadata.update({'isShortcut': metadata['mimeType'] == _shortcutMimeType})
+	rawInfo.update({'google': googleMetadata})
+	# there is also file-type-specific metadata like imageMediaMetadata
+	return Info(rawInfo)
+
+def _GenerateChildren(children, page):
+	if page:
+		return (_InfoFromMetadata(x) for x in children[page[0]:page[1]])
+	return (_InfoFromMetadata(x) for x in children)
 
 # TODO - switch to MediaIoBaseUpload and use BytesIO
 class _UploadOnClose(RawWrapper):
@@ -174,7 +206,7 @@ class GoogleDriveFS(FS):
 
 		_meta = self._meta = {
 			'case_insensitive': True, # it will even let you have 2 identical filenames in the same directory! But the search is case-insensitive
-			'invalid_path_chars': _INVALID_PATH_CHARS,  # not sure what else
+			'invalid_path_chars': ':\0',  # not sure what else
 			'max_path_length': None,  # don't know what the limit is
 			'max_sys_path_length': None,  # there's no syspath
 			'network': True,
@@ -191,7 +223,7 @@ class GoogleDriveFS(FS):
 	def search(self, condition):
 		_log.info(f'search: {condition()}')
 		rawResults = self._fileQuery(condition())
-		return (self._infoFromMetadata(x) for x in rawResults)
+		return (_InfoFromMetadata(x) for x in rawResults)
 
 	def _fileQuery(self, query):
 		allFields = f'nextPageToken,files({_ALL_FIELDS})'
@@ -227,10 +259,10 @@ class GoogleDriveFS(FS):
 		return self._fileQuery(f"trashed=False and '{parentId}' in parents")
 
 	def _itemsFromPath(self, path):
-		pathIdMap = {'': _rootMetadata}
+		pathIdMap = {'/': _rootMetadata}
 		ipath = iteratepath(path)
 
-		pathSoFar = ''
+		pathSoFar = '/'
 		parentId = self.rootId
 
 		if self.rootId is not None:
@@ -243,7 +275,7 @@ class GoogleDriveFS(FS):
 			).execute()
 			if rootMetadata is None:
 				return pathIdMap
-			pathIdMap[''] = rootMetadata
+			pathIdMap['/'] = rootMetadata
 
 		for childName in ipath:
 			pathSoFar = join(pathSoFar, childName)
@@ -260,53 +292,16 @@ class GoogleDriveFS(FS):
 		pathIdMap = self._itemsFromPath(path)
 		return pathIdMap.get(path)
 
-	def _infoFromMetadata(self, metadata):  # pylint: disable=no-self-use
-		isRoot = (metadata == _rootMetadata)
-		isFolder = (metadata['mimeType'] == _folderMimeType)
-		rfc3339 = '%Y-%m-%dT%H:%M:%S.%fZ'
-		permissions = metadata.get('permissions', None)
-		rawInfo = {
-			'basic': {
-				'name': '' if isRoot else metadata['name'],
-				'is_dir': isFolder
-			},
-			'details': {
-				'accessed': None,  # not supported by Google Drive API
-				'created': None if isRoot else datetime_to_epoch(datetime.strptime(metadata['createdTime'], rfc3339)),
-				'metadata_changed': None,  # not supported by Google Drive API
-				'modified': None if isRoot else datetime_to_epoch(datetime.strptime(metadata['modifiedTime'], rfc3339)),
-				'size': int(metadata['size']) if 'size' in metadata else None, # folders, native google documents etc have no size
-				'type': ResourceType.directory if isFolder else ResourceType.file
-			},
-			'sharing': {
-				'id': metadata['id'],
-				'permissions': permissions,
-				'is_shared': len(permissions) > 1 if permissions is not None else False
-			}
-		}
-		googleMetadata = {}
-		if 'contentHints' in metadata and 'indexableText' in metadata['contentHints']:
-			googleMetadata.update({'indexableText': metadata['contentHints']['indexableText']})
-		if 'appProperties' in metadata:
-			googleMetadata.update({'appProperties': metadata['appProperties']})
-		if 'md5Checksum' in metadata:
-			rawInfo.update({'hashes': {'MD5': metadata['md5Checksum']}})
-		if 'mimeType' in metadata:
-			googleMetadata.update({'isShortcut': metadata['mimeType'] == _shortcutMimeType})
-		rawInfo.update({'google': googleMetadata})
-		# there is also file-type-specific metadata like imageMediaMetadata
-		return Info(rawInfo)
-
 	def getinfo(self, path, namespaces=None):  # pylint: disable=unused-argument
-		path = _CheckPath(path)
+		path = self.validatepath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
 			if metadata is None:
 				raise ResourceNotFound(path=path)
-			return self._infoFromMetadata(metadata)
+			return _InfoFromMetadata(metadata)
 
-	def setinfo(self, path, info):  # pylint: disable=redefined-outer-name,too-many-branches,unused-argument
-		path = _CheckPath(path)
+	def setinfo(self, path, info):  # pylint: disable=redefined-outer-name,too-many-branches
+		path = self.validatepath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
 			if metadata is None:
@@ -338,7 +333,7 @@ class GoogleDriveFS(FS):
 		:param role: google drive sharing role
 		:return: URL
 		"""
-		path = _CheckPath(path)
+		path = self.validatepath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
 			if metadata is None:
@@ -353,7 +348,7 @@ class GoogleDriveFS(FS):
 			return self.geturl(path)
 
 	def hasurl(self, path, purpose='download'):
-		path = _CheckPath(path)
+		path = self.validatepath(path)
 		if purpose != 'download':
 			raise NoURL(path, purpose, 'No such purpose')
 		with self._lock:
@@ -362,8 +357,8 @@ class GoogleDriveFS(FS):
 			except ResourceNotFound:
 				return False
 
-	def geturl(self, path, purpose='download'): # pylint: disable=unused-argument
-		path = _CheckPath(path)
+	def geturl(self, path, purpose='download'):
+		path = self.validatepath(path)
 		if purpose != 'download':
 			raise NoURL(path, purpose, 'No such purpose')
 		with self._lock:
@@ -373,7 +368,7 @@ class GoogleDriveFS(FS):
 			return _sharingUrl + fileInfo.get('sharing', 'id')
 
 	def listdir(self, path):
-		path = _CheckPath(path)
+		path = self.validatepath(path)
 		with self._lock:
 			return [x.name for x in self.scandir(path)]
 
@@ -387,7 +382,7 @@ class GoogleDriveFS(FS):
 		return SubGoogleDriveFS(self, path)
 
 	def makedir(self, path, permissions=None, recreate=False):
-		path = _CheckPath(path)
+		path = self.validatepath(path)
 		with self._lock:
 			_log.info(f'makedir: {path}, {permissions}, {recreate}')
 			parentMetadata = self._itemFromPath(dirname(path))
@@ -403,8 +398,8 @@ class GoogleDriveFS(FS):
 
 			return self._createSubdirectory(basename(path), path, [parentMetadata['id']])
 
-	def openbin(self, path, mode='r', buffering=-1, **options):  # pylint: disable=unused-argument
-		path = _CheckPath(path)
+	def openbin(self, path, mode='r', buffering=-1, **options):
+		path = self.validatepath(path)
 		with self._lock:
 			_log.info(f'openbin: {path}, {mode}, {buffering}')
 			parsedMode = Mode(mode)
@@ -446,7 +441,7 @@ class GoogleDriveFS(FS):
 			_log.debug('download status %r %s/%s bytes (%.1f%%)', path, status.resumable_progress, status.total_size, status.progress() * 100)
 
 	def download(self, path, file, chunk_size=None, **options):
-		path = _CheckPath(path)
+		path = self.validatepath(path)
 		if chunk_size is None:
 			chunk_size = DEFAULT_CHUNK_SIZE
 		with self._lock:
@@ -460,9 +455,9 @@ class GoogleDriveFS(FS):
 				self._download_to_file(path, metadata, file, chunk_size)
 
 	def remove(self, path):
+		path = self.validatepath(path)
 		if path == '/':
 			raise RemoveRootError()
-		path = _CheckPath(path)
 		with self._lock:
 			_log.info(f'remove: {path}')
 			metadata = self._itemFromPath(path)
@@ -476,9 +471,9 @@ class GoogleDriveFS(FS):
 			).execute(num_retries=self.retryCount)
 
 	def removedir(self, path):
+		path = self.validatepath(path)
 		if path == '/':
 			raise RemoveRootError()
-		path = _CheckPath(path)
 		with self._lock:
 			_log.info(f'removedir: {path}')
 			metadata = self._itemFromPath(path)
@@ -494,15 +489,10 @@ class GoogleDriveFS(FS):
 				**self._file_kwargs,
 			).execute(num_retries=self.retryCount)
 
-	def _generateChildren(self, children, page):
-		if page:
-			return (self._infoFromMetadata(x) for x in children[page[0]:page[1]])
-		return (self._infoFromMetadata(x) for x in children)
-
 	# Non-essential method - for speeding up walk
 	# Takes advantage of the fact that you get the full metadata for all children in one call
 	def scandir(self, path, namespaces=None, page=None):
-		path = _CheckPath(path)
+		path = self.validatepath(path)
 		with self._lock:
 			_log.info(f'scandir: {path}, {namespaces}, {page}')
 			metadata = self._itemFromPath(path)
@@ -513,13 +503,13 @@ class GoogleDriveFS(FS):
 				raise DirectoryExpected(path=path)
 
 			children = self._childrenById(metadata['id'])
-			return self._generateChildren(children, page)
+			return _GenerateChildren(children, page)
 
 	# Non-essential - takes advantage of the file contents are already being on the server
 	def copy(self, src_path, dst_path, overwrite=False, preserve_time=False):
 		_log.info(f'copy: {src_path} -> {dst_path}, {overwrite}')
-		src_path = _CheckPath(src_path)
-		dst_path = _CheckPath(dst_path)
+		src_path = self.validatepath(src_path)
+		dst_path = self.validatepath(dst_path)
 		with self._lock:
 			parentDir = dirname(dst_path)
 			parentDirItem = self._itemFromPath(parentDir)
@@ -559,8 +549,8 @@ class GoogleDriveFS(FS):
 	# Non-essential - takes advantage of the file contents already being on the server
 	def move(self, src_path, dst_path, overwrite=False, preserve_time=False):
 		_log.info(f'move: {src_path} -> {dst_path}, {overwrite}')
-		src_path = _CheckPath(src_path)
-		dst_path = _CheckPath(dst_path)
+		src_path = self.validatepath(src_path)
+		dst_path = self.validatepath(dst_path)
 		with self._lock:
 			dstItem = self._itemFromPath(dst_path)
 			if overwrite is False and dstItem is not None:
@@ -606,8 +596,8 @@ class GoogleDriveFS(FS):
 
 	def add_shortcut(self, shortcut_path, target_path):
 		_log.info(f'add_shortcut: {shortcut_path}, {target_path}')
-		shortcut_path = _CheckPath(shortcut_path)
-		target_path = _CheckPath(target_path)
+		shortcut_path = self.validatepath(shortcut_path)
+		target_path = self.validatepath(target_path)
 
 		with self._lock:
 			idsFromTargetPath = self._itemsFromPath(target_path)
