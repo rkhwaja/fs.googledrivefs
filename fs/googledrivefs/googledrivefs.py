@@ -109,8 +109,6 @@ class _UploadOnClose(RawWrapper):
 				while response is None:
 					status, response = request.next_chunk()
 					_log.debug(f'{status}: {response}')
-				# MediaFileUpload doesn't close it's file handle, so we have to workaround it (https://github.com/googleapis/google-api-python-client/issues/575)
-				upload._fd.close()  # pylint: disable=protected-access
 			else:
 				fh = BytesIO(b'')
 				media = MediaIoBaseUpload(fh, mimetype='application/octet-stream', chunksize=-1, resumable=False)
