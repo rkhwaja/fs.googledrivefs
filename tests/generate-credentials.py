@@ -13,13 +13,13 @@ class TokenStorageFile:
 
 	def Save(self, token):
 		"""Save the given token"""
-		with open(self.path, 'w') as f:
+		with open(self.path, 'w', encoding='utf-8') as f:
 			dump(token, f)
 
 	def Load(self):
 		"""Load and return the token"""
 		try:
-			with open(self.path, 'r') as f:
+			with open(self.path, 'r', encoding='utf-8') as f:
 				return load(f)
 		except FileNotFoundError:
 			return None

@@ -24,7 +24,7 @@ def CredentialsDict():
 	if 'GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY' in environ:
 		return loads(environ['GOOGLEDRIVEFS_TEST_TOKEN_READ_ONLY'])
 	if 'GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH' in environ:
-		with open(environ['GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH']) as f:
+		with open(environ['GOOGLEDRIVEFS_TEST_CREDENTIALS_PATH'], encoding='utf-8') as f:
 			return load(f)
 	return None
 
@@ -136,8 +136,8 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 		with BytesIO() as f:
 			self.fs.download('test-spreadsheet', f, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 			f.seek(0)
-			zipfile = ZipFile(f)
-			assert '[Content_Types].xml' in zipfile.namelist()
+			with ZipFile(f) as zipfile:
+				assert '[Content_Types].xml' in zipfile.namelist()
 
 def test_root():
 	fullFS = FullFS()

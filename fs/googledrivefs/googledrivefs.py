@@ -97,7 +97,8 @@ class _UploadOnClose(RawWrapper):
 		platformMode = self.parsedMode.to_platform()
 		platformMode += ('b' if 'b' not in platformMode else '')
 		platformMode = platformMode.replace('x', 'a')
-		super().__init__(f=open(self.localPath, mode=platformMode))
+		# transferring ownership of this open file handle to RawWrapper
+		super().__init__(f=open(self.localPath, mode=platformMode)) # pylint: disable=consider-using-with,unspecified-encoding
 		if self.parsedMode.appending:
 			# seek to the end
 			self.seek(0, SEEK_END)
