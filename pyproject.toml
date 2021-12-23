@@ -22,7 +22,7 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.6"
+python = ">=3.6,<4"
 fs = ">=2.4.13"
 google-api-python-client = ">=1.7.10"
 google-auth = ">=1.5.1"
@@ -32,7 +32,7 @@ pytest = ">=3.10"
 pytest-timeout = ">=1.3.3"
 requests-oauthlib = ">=1.0"
 pyperclip = ">=1.7"
-pylint = ">=2.5.3"
+pylint = ">=2.11" # need at least this for all the extensions
 pylint-quotes = ">=0.2.1"
 pytest-cov = ">=2.10.1"
 
@@ -42,7 +42,20 @@ pytest-cov = ">=2.10.1"
 "googledrive" = "fs.googledrivefs.opener:GoogleDriveFSOpener"
 
 [tool.pylint.master]
-load-plugins = "pylint_quotes"
+load-plugins = [
+	"pylint_quotes",
+	"pylint.extensions.code_style",
+	"pylint.extensions.confusing_elif",
+	"pylint.extensions.bad_builtin",
+	"pylint.extensions.bad_builtin",
+	# "pylint.extensions.mccabe",
+	"pylint.extensions.check_elif",
+	"pylint.extensions.redefined_variable_type",
+	"pylint.extensions.overlapping_exceptions",
+	"pylint.extensions.empty_comment",
+	"pylint.extensions.set_membership",
+	# "pylint.extensions.while_used",
+	]
 enable="useless-suppression"
 
 [tool.pylint.format]
@@ -54,6 +67,8 @@ string-quote = "single-avoid-escape"
 # no-member to remove false positives with objects constructed via google's discovery protocol
 disable = [
 	"bad-continuation",
+	"confusing-consecutive-elif",
+	"consider-using-assignment-expr", # forces too many changes
 	"fixme",
 	"invalid-name",
 	"len-as-condition",
