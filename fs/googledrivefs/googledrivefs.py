@@ -23,7 +23,7 @@ from fs.time import datetime_to_epoch, epoch_to_datetime
 _folderMimeType = 'application/vnd.google-apps.folder'
 _shortcutMimeType = 'application/vnd.google-apps.shortcut'
 _sharingUrl = 'https://drive.google.com/open?id='
-_log = getLogger('fs.googledrivefs')
+_log = getLogger(__name__)
 _rootMetadata = {'id': 'root', 'mimeType': _folderMimeType}
 _ALL_FIELDS = 'id,mimeType,kind,name,createdTime,modifiedTime,size,permissions,appProperties,contentHints,md5Checksum'
 
