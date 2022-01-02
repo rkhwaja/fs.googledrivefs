@@ -219,11 +219,13 @@ class GoogleDriveFS(FS):
 		return '<GoogleDriveFS>'
 
 	def google_resource(self):
+		_log.info(f'google_resource()')
 		return self._drive
 
 	def search(self, condition):
 		_log.info(f'search: {condition()}')
-		rawResults = self._fileQuery(condition())
+		with self._lock:
+			rawResults = self._fileQuery(condition())
 		return (_InfoFromMetadata(x) for x in rawResults)
 
 	def _fileQuery(self, query):
