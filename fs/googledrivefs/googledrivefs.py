@@ -219,11 +219,11 @@ class GoogleDriveFS(FS):
 		return '<GoogleDriveFS>'
 
 	def google_resource(self):
-		_log.info(f'google_resource()')
+		_log.info('google_resource()')
 		return self._drive
 
 	def search(self, condition):
-		_log.info(f'search: {condition()}')
+		_log.info(f'search({condition()})')
 		with self._lock:
 			rawResults = self._fileQuery(condition())
 		return (_InfoFromMetadata(x) for x in rawResults)
@@ -296,6 +296,7 @@ class GoogleDriveFS(FS):
 		return pathIdMap.get(path)
 
 	def getinfo(self, path, namespaces=None):
+		_log.info(f'getinfo({path}, {namespaces})')
 		path = self.validatepath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
@@ -304,6 +305,7 @@ class GoogleDriveFS(FS):
 			return _InfoFromMetadata(metadata)
 
 	def setinfo(self, path, info):
+		_log.info(f'setinfo({path}, {info})')
 		path = self.validatepath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
@@ -336,6 +338,7 @@ class GoogleDriveFS(FS):
 		:param role: google drive sharing role
 		:return: URL
 		"""
+		_log.info(f'share({path}, {email}, {role})')
 		path = self.validatepath(path)
 		with self._lock:
 			metadata = self._itemFromPath(path)
@@ -351,6 +354,7 @@ class GoogleDriveFS(FS):
 			return self.geturl(path)
 
 	def hasurl(self, path, purpose='download'):
+		_log.info(f'hasurl({path}, {purpose})')
 		path = self.validatepath(path)
 		if purpose != 'download':
 			raise NoURL(path, purpose, 'No such purpose')
@@ -361,6 +365,7 @@ class GoogleDriveFS(FS):
 				return False
 
 	def geturl(self, path, purpose='download'):
+		_log.info(f'geturl({path}, {purpose})')
 		path = self.validatepath(path)
 		if purpose != 'download':
 			raise NoURL(path, purpose, 'No such purpose')
@@ -371,6 +376,7 @@ class GoogleDriveFS(FS):
 			return _sharingUrl + fileInfo.get('sharing', 'id')
 
 	def listdir(self, path):
+		_log.info(f'listdir({path})')
 		path = self.validatepath(path)
 		with self._lock:
 			return [x.name for x in self.scandir(path)]
@@ -385,9 +391,9 @@ class GoogleDriveFS(FS):
 		return SubGoogleDriveFS(self, path)
 
 	def makedir(self, path, permissions=None, recreate=False):
+		_log.info(f'makedir({path}, {permissions}, {recreate})')
 		path = self.validatepath(path)
 		with self._lock:
-			_log.info(f'makedir: {path}, {permissions}, {recreate}')
 			parentMetadata = self._itemFromPath(dirname(path))
 
 			if parentMetadata is None:
@@ -402,9 +408,9 @@ class GoogleDriveFS(FS):
 			return self._createSubdirectory(basename(path), path, [parentMetadata['id']])
 
 	def openbin(self, path, mode='r', buffering=-1, **options):
+		_log.info(f'openbin({path}, {mode}, {buffering}, {options})')
 		path = self.validatepath(path)
 		with self._lock:
-			_log.info(f'openbin: {path}, {mode}, {buffering}')
 			parsedMode = Mode(mode)
 			idsFromPath = self._itemsFromPath(path)
 			item = idsFromPath.get(path)
@@ -423,7 +429,7 @@ class GoogleDriveFS(FS):
 			return _UploadOnClose(fs=self, path=path, thisMetadata=item, parentMetadata=parentDirItem, parsedMode=parsedMode, **options)
 
 	def _download_to_file(self, path, metadata, file_obj, chunk_size):
-		_log.info('download %r', path)
+		_log.debug(f'download {path!r}')
 		assert metadata is not None
 		request = self._drive.files().get_media(fileId=metadata['id'])
 		self._download_request(path, request, file_obj, chunk_size)
@@ -444,6 +450,7 @@ class GoogleDriveFS(FS):
 			_log.debug('download status %r %s/%s bytes (%.1f%%)', path, status.resumable_progress, status.total_size, status.progress() * 100)
 
 	def download(self, path, file, chunk_size=None, **options):
+		_log.info(f'download({path}, {file}, {chunk_size}, {options})')
 		path = self.validatepath(path)
 		if chunk_size is None:
 			chunk_size = DEFAULT_CHUNK_SIZE
@@ -458,11 +465,11 @@ class GoogleDriveFS(FS):
 				self._download_to_file(path, metadata, file, chunk_size)
 
 	def remove(self, path):
+		_log.info(f'remove({path})')
 		path = self.validatepath(path)
 		if path == '/':
 			raise RemoveRootError()
 		with self._lock:
-			_log.info(f'remove: {path}')
 			metadata = self._itemFromPath(path)
 			if metadata is None:
 				raise ResourceNotFound(path=path)
@@ -474,11 +481,11 @@ class GoogleDriveFS(FS):
 			).execute(num_retries=self.retryCount)
 
 	def removedir(self, path):
+		_log.info(f'removedir({path})')
 		path = self.validatepath(path)
 		if path == '/':
 			raise RemoveRootError()
 		with self._lock:
-			_log.info(f'removedir: {path}')
 			metadata = self._itemFromPath(path)
 			if metadata is None:
 				raise ResourceNotFound(path=path)
@@ -495,9 +502,9 @@ class GoogleDriveFS(FS):
 	# Non-essential method - for speeding up walk
 	# Takes advantage of the fact that you get the full metadata for all children in one call
 	def scandir(self, path, namespaces=None, page=None):
+		_log.info(f'scandir({path}, {namespaces}, {page})')
 		path = self.validatepath(path)
 		with self._lock:
-			_log.info(f'scandir: {path}, {namespaces}, {page}')
 			metadata = self._itemFromPath(path)
 			if metadata is None:
 				raise ResourceNotFound(path=path)
@@ -510,7 +517,7 @@ class GoogleDriveFS(FS):
 
 	# Non-essential - takes advantage of the file contents are already being on the server
 	def copy(self, src_path, dst_path, overwrite=False, preserve_time=False):
-		_log.info(f'copy: {src_path} -> {dst_path}, {overwrite}')
+		_log.info(f'copy({src_path}, {dst_path}, {overwrite}, {preserve_time})')
 		src_path = self.validatepath(src_path)
 		dst_path = self.validatepath(dst_path)
 		with self._lock:
@@ -551,7 +558,7 @@ class GoogleDriveFS(FS):
 
 	# Non-essential - takes advantage of the file contents already being on the server
 	def move(self, src_path, dst_path, overwrite=False, preserve_time=False):
-		_log.info(f'move: {src_path} -> {dst_path}, {overwrite}')
+		_log.info(f'move({src_path}, {dst_path}, {overwrite}, {preserve_time})')
 		src_path = self.validatepath(src_path)
 		dst_path = self.validatepath(dst_path)
 		with self._lock:
@@ -598,7 +605,7 @@ class GoogleDriveFS(FS):
 			).execute(num_retries=self.retryCount)
 
 	def add_shortcut(self, shortcut_path, target_path):
-		_log.info(f'add_shortcut: {shortcut_path}, {target_path}')
+		_log.info(f'add_shortcut({shortcut_path}, {target_path})')
 		shortcut_path = self.validatepath(shortcut_path)
 		target_path = self.validatepath(target_path)
 
