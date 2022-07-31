@@ -14,15 +14,15 @@ classifiers = [
 	"License :: OSI Approved :: MIT License",
 	"Development Status :: 5 - Production/Stable",
 	"Intended Audience :: Developers",
-	"Programming Language :: Python :: 3.6",
 	"Programming Language :: Python :: 3.7",
 	"Programming Language :: Python :: 3.8",
 	"Programming Language :: Python :: 3.9",
-	"Programming Language :: Python :: 3.10"
+	"Programming Language :: Python :: 3.10",
+	"Programming Language :: Python :: 3.11"
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.7,<4"
+python = ">=3.7"
 fs = ">=2.4.13"
 google-api-python-client = ">=1.7.10"
 google-auth = ">=1.5.1"
@@ -32,7 +32,7 @@ pytest = ">=3.10"
 pytest-timeout = ">=1.3.3"
 requests-oauthlib = ">=1.0"
 pyperclip = ">=1.7"
-pylint = ">=2.11" # need at least this for all the extensions
+pylint = ">=2.13" # need for python 3.11 support
 pylint-quotes = ">=0.2.1"
 pytest-cov = ">=2.10.1"
 poethepoet = ">=0.16.4"
@@ -86,7 +86,8 @@ disable = [
 	"logging-format-interpolation",
 	"logging-fstring-interpolation",
 	"missing-docstring",
-	"no-member"
+	"no-member",
+	"no-name-in-module" # doesn't work for python 3.11
 ]
 
 [build-system]
