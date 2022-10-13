@@ -39,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false      
       matrix:
-        python-version: [3.6, 3.7, 3.8, 3.9, "3.10"]
+        python-version: [3.7, 3.8, 3.9, "3.10"]
 
     steps:
     - uses: actions/checkout@v2
@@ -55,7 +55,7 @@ jobs:
         poetry install
     - name: Lint
       run: |
-        pylint fs/googledrivefs/ tests/
+        poe lint
     - name: Tests
       env:
         GOOGLEDRIVEFS_TEST_CLIENT_ID: ${{ secrets.GOOGLEDRIVEFS_TEST_CLIENT_ID }}
@@ -64,8 +64,7 @@ jobs:
       if: ${{needs.secrets.outputs.valid}} == 'true'
       run: |
         if python --version | grep -q 'Python 3.10' ; then
-          pytest --cov=fs/googledrivefs --timeout=2700
-          coverage xml
+          poe test
         fi
     - name: Coverage
       uses: codecov/codecov-action@v2.1.0
