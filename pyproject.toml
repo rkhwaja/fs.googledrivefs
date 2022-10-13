@@ -22,7 +22,7 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.6,<4"
+python = ">=3.7,<4"
 fs = ">=2.4.13"
 google-api-python-client = ">=1.7.10"
 google-auth = ">=1.5.1"
@@ -35,6 +35,16 @@ pyperclip = ">=1.7"
 pylint = ">=2.11" # need at least this for all the extensions
 pylint-quotes = ">=0.2.1"
 pytest-cov = ">=2.10.1"
+poethepoet = ">=0.16.4"
+
+[tool.poe.tasks]
+lint = "pylint fs/googledrivefs/ tests/"
+
+[tool.poe.tasks.test]
+shell = """
+pytest --cov=fs/googledrivefs --timeout=2700
+coverage xml
+"""
 
 [tool.poetry.plugins] # Optional super table
 
