@@ -42,7 +42,7 @@ lint = "pylint fs/googledrivefs/ tests/"
 
 [tool.poe.tasks.test]
 shell = """
-pytest --cov=fs/googledrivefs --timeout=2700
+pytest --cov=fs/googledrivefs --timeout=2700 || exit 1
 coverage xml
 """
 
