@@ -32,16 +32,15 @@ pytest = ">=7.2.0"
 pytest-timeout = ">=1.3.3"
 requests-oauthlib = ">=1.0"
 pyperclip = ">=1.7"
-pylint = ">=2.13" # need for python 3.11 support
-pylint-quotes = ">=0.2.1"
 pytest-cov = ">=2.10.1"
 poethepoet = ">=0.16.4"
 pyngrok = ">=5.0.6,<6"
 pytest-localserver = ">=0.5.0"
 pytest-xdist = ">=3.2.1"
+ruff = ">=0.0.291"
 
 [tool.poe.tasks]
-lint = "pylint fs/googledrivefs/ tests/"
+lint = "ruff fs/googledrivefs/ tests/"
 
 [tool.poe.tasks.test]
 shell = """
@@ -54,44 +53,19 @@ coverage xml
 [tool.poetry.plugins."fs.opener"]
 "googledrive" = "fs.googledrivefs.opener:GoogleDriveFSOpener"
 
-[tool.pylint.master]
-load-plugins = [
-	"pylint_quotes",
-	"pylint.extensions.code_style",
-	"pylint.extensions.confusing_elif",
-	"pylint.extensions.bad_builtin",
-	"pylint.extensions.bad_builtin",
-	# "pylint.extensions.mccabe",
-	"pylint.extensions.check_elif",
-	"pylint.extensions.redefined_variable_type",
-	"pylint.extensions.overlapping_exceptions",
-	"pylint.extensions.empty_comment",
-	"pylint.extensions.set_membership",
-	# "pylint.extensions.while_used",
-	]
-enable="useless-suppression"
+[tool.ruff]
+line-length = 200
+ignore = ["ANN", "D", "DTZ", "EM102", "FBT002", "FIX", "I", "N", "PT009", "PT027", "PT013", "PTH", "S101", "TCH003", "TD", "TRY003", "W191"]
+select = ["ALL"]
+target-version = "py37"
 
-[tool.pylint.format]
-indent-string = "\t"
-max-line-length = "200"
-string-quote = "single-avoid-escape"
+[tool.ruff.extend-per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["ANN201", "D103", "INP001", "PT006"]
 
-[tool.pylint.messages_control]
-# no-member to remove false positives with objects constructed via google's discovery protocol
-disable = [
-	"bad-continuation",
-	"confusing-consecutive-elif",
-	"consider-using-assignment-expr", # forces too many changes
-	"fixme",
-	"invalid-name",
-	"len-as-condition",
-	"line-too-long",
-	"logging-format-interpolation",
-	"logging-fstring-interpolation",
-	"missing-docstring",
-	"no-member",
-	"no-name-in-module" # doesn't work for python 3.11
-]
+[tool.ruff.flake8-quotes]
+inline-quotes = "single"
+multiline-quotes = "single"
 
 [build-system]
 requires = ["poetry_core>=1.0.0"]
