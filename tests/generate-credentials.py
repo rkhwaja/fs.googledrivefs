@@ -19,7 +19,7 @@ class TokenStorageFile:
 	def Load(self):
 		"""Load and return the token"""
 		try:
-			with open(self.path, 'r', encoding='utf-8') as f:
+			with open(self.path, encoding='utf-8') as f:
 				return load(f)
 		except FileNotFoundError:
 			return None
@@ -30,12 +30,12 @@ def Authorize(clientId, clientSecret, tokenStoragePath):
 	_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 	session = OAuth2Session(client_id=clientId, scope=_SCOPE, redirect_uri='https://localhost')
 	authorizationUrl, _ = session.authorization_url(authorizationBaseUrl, access_type='offline', prompt='consent')
-	print(f'Go to the following URL and authorize the app: {authorizationUrl}')
+	print(f'Go to the following URL and authorize the app: {authorizationUrl}') # noqa: T201
 
 	try:
-		from pyperclip import copy # pylint: disable=import-outside-toplevel
+		from pyperclip import copy
 		copy(authorizationUrl)
-		print('URL copied to clipboard')
+		print('URL copied to clipboard') # noqa: T201
 	except ImportError:
 		pass
 

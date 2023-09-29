@@ -16,11 +16,11 @@ from fs.opener import open_fs, registry
 from fs.path import join
 from fs.test import FSTestCases
 from fs.time import datetime_to_epoch
-from google.auth import default # pylint: disable=wrong-import-order
-from google.oauth2.credentials import Credentials # pylint: disable=wrong-import-order
-from pyngrok import conf, ngrok # pylint: disable=wrong-import-order
-from pytest import fixture, mark, raises # pylint: disable=wrong-import-order
-from pytest_localserver.http import WSGIServer # pylint: disable=wrong-import-order
+from google.auth import default
+from google.oauth2.credentials import Credentials
+from pyngrok import conf, ngrok
+from pytest import fixture, mark, raises
+from pytest_localserver.http import WSGIServer
 
 _safeDirForTests = '/test-googledrivefs'
 
@@ -37,7 +37,7 @@ def FullFS():
 	if credentialsDict:
 		credentials = Credentials(credentialsDict['access_token'],
 			refresh_token=credentialsDict['refresh_token'],
-			token_uri='https://www.googleapis.com/oauth2/v4/token',
+			token_uri='https://www.googleapis.com/oauth2/v4/token', # noqa: S106
 			client_id=environ['GOOGLEDRIVEFS_TEST_CLIENT_ID'],
 			client_secret=environ['GOOGLEDRIVEFS_TEST_CLIENT_SECRET'])
 	else:
@@ -49,7 +49,7 @@ def FullFS():
 		driveId=environ.get('GOOGLEDRIVEFS_TEST_DRIVE_ID'),
 	)
 
-class simple_app: # pylint: disable=too-few-public-methods
+class simple_app:
 	def __init__(self):
 		self.notified = False
 
@@ -75,8 +75,8 @@ def testserver(request):
 	server = WSGIServer(application=simple_app())
 	request.cls.server = server
 	server.start()
-	request.addfinalizer(server.stop)
-	return server
+	yield server
+	server.stop()
 
 class TestGoogleDriveFS(FSTestCases, TestCase):
 	def make_fs(self):
@@ -115,13 +115,10 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 	def test_watch(self):
 		with self.assertRaises(ResourceNotFound):
 			self.fs.watch('doesnt-exist', 'https://example.com', 'someid')
-		# self.fs.makedir('directory')
-		# with self.assertRaises(FileExpected):
-		# 	self.fs.watch('directory', 'https://example.com', 'someid')
 
 	def test_hashes(self):
 		self.fs.writebytes('file', b'xxxx')
-		expectedHash = md5(b'xxxx').hexdigest()
+		expectedHash = md5(b'xxxx').hexdigest() # noqa: S324
 		info_ = self.fs.getinfo('file', 'hashes')
 		remoteHash = info_.get('hashes', 'MD5', None)
 		assert expectedHash == remoteHash
@@ -195,9 +192,8 @@ class TestGoogleDriveFS(FSTestCases, TestCase):
 		id_ = self.fs.getinfo('').get('sharing', 'id')
 		body = {'mimeType': 'application/vnd.google-apps.spreadsheet', 'name': 'test-spreadsheet', 'parents': [id_]}
 		self.fs.google_resource().files().create(body=body).execute()
-		with BytesIO() as f:
-			with raises(OperationFailed):
-				self.fs.download('test-spreadsheet', f)
+		with BytesIO() as f, raises(OperationFailed):
+			self.fs.download('test-spreadsheet', f)
 		with BytesIO() as f:
 			self.fs.download('test-spreadsheet', f, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 			f.seek(0)
@@ -270,12 +266,12 @@ def test_opener():
 	# Without the initial "/" character, it should still be assumed to relative to the root
 	fs = open_fs(f'googledrive://test-googledrivefs?access_token={access_token}&refresh_token={refresh_token}&client_id={client_id}&client_secret={client_secret}')
 	assert isinstance(fs, SubGoogleDriveFS), str(fs)
-	assert fs._sub_dir == '/test-googledrivefs' # pylint: disable=protected-access
+	assert fs._sub_dir == '/test-googledrivefs' # noqa: SLF001
 
 	# It should still accept the initial "/" character
 	fs = open_fs(f'googledrive:///test-googledrivefs?access_token={access_token}&refresh_token={refresh_token}&client_id={client_id}&client_secret={client_secret}')
 	assert isinstance(fs, SubGoogleDriveFS), str(fs)
-	assert fs._sub_dir == '/test-googledrivefs' # pylint: disable=protected-access
+	assert fs._sub_dir == '/test-googledrivefs' # noqa: SLF001
 
 @skipUnless('GOOGLEDRIVEFS_TEST_ROOT_ID' in environ, 'root id required')
 def test_opener_with_root_id():
@@ -289,9 +285,9 @@ def test_opener_with_root_id():
 	# Without the initial "/" character, it should still be assumed to relative to the root
 	fs = open_fs(f'googledrive://test-googledrivefs?{query}')
 	assert isinstance(fs, SubGoogleDriveFS), str(fs)
-	assert fs._sub_dir == '/test-googledrivefs' # pylint: disable=protected-access
+	assert fs._sub_dir == '/test-googledrivefs' # noqa: SLF001
 
 	# It should still accept the initial "/" character
 	fs = open_fs(f'googledrive:///test-googledrivefs?{query}')
 	assert isinstance(fs, SubGoogleDriveFS), str(fs)
-	assert fs._sub_dir == '/test-googledrivefs' # pylint: disable=protected-access
+	assert fs._sub_dir == '/test-googledrivefs' # noqa: SLF001

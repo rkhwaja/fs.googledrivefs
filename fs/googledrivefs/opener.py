@@ -1,22 +1,26 @@
+from __future__ import annotations
+
 __all__ = ['GoogleDriveFSOpener']
 
+from typing import ClassVar
+
 from fs.opener import Opener
-import google.auth # pylint: disable=wrong-import-order
-from google.oauth2.credentials import Credentials # pylint: disable=wrong-import-order
+import google.auth
+from google.oauth2.credentials import Credentials
 
 from .googledrivefs import GoogleDriveFS
 
-class GoogleDriveFSOpener(Opener): # pylint: disable=too-few-public-methods
-	protocols = ['googledrive']
+class GoogleDriveFSOpener(Opener):
+	protocols: ClassVar[list[str]] = ['googledrive']
 
-	def open_fs(self, fs_url, parse_result, writeable, create, cwd): # pylint: disable=too-many-arguments
+	def open_fs(self, fs_url, parse_result, writeable, create, cwd): # noqa: ARG002, PLR0913
 		directory = parse_result.resource
 
 		if 'access_token' in parse_result.params:
 			# if `access_token` parameters are provided then use them..
 			credentials = Credentials(parse_result.params.get('access_token'),
 				refresh_token=parse_result.params.get('refresh_token', None),
-				token_uri='https://www.googleapis.com/oauth2/v4/token',
+				token_uri='https://www.googleapis.com/oauth2/v4/token', # noqa: S106
 				client_id=parse_result.params.get('client_id', None),
 				client_secret=parse_result.params.get('client_secret', None))
 		else:
