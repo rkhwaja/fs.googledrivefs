@@ -3,7 +3,7 @@ name = "fs.googledrivefs"
 packages = [
     { include = "fs"}
 ]
-version = "2.4.1"
+version = "2.4.2"
 description = "Pyfilesystem2 implementation for Google Drive"
 authors = ["Rehan Khwaja <rehan@khwaja.name>"]
 license = "MIT"
@@ -18,7 +18,8 @@ classifiers = [
 	"Programming Language :: Python :: 3.8",
 	"Programming Language :: Python :: 3.9",
 	"Programming Language :: Python :: 3.10",
-	"Programming Language :: Python :: 3.11"
+	"Programming Language :: Python :: 3.11",
+	"Programming Language :: Python :: 3.12"
 ]
 
 [tool.poetry.dependencies]
@@ -55,7 +56,7 @@ coverage xml
 
 [tool.ruff]
 line-length = 200
-ignore = ["ANN", "D", "DTZ", "EM102", "FBT002", "FIX", "I", "N", "PT009", "PT027", "PT013", "PTH", "S101", "TCH003", "TD", "TRY003", "W191"]
+ignore = ["ANN", "D", "DTZ", "EM102", "ERA001", "FBT002", "FIX", "G004", "I", "N", "PT009", "PT027", "PT013", "PTH", "S101", "TCH003", "TD", "TRY003", "W191"]
 select = ["ALL"]
 target-version = "py37"
 

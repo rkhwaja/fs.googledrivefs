@@ -78,7 +78,16 @@ def testserver(request):
 	yield server
 	server.stop()
 
-class TestGoogleDriveFS(FSTestCases, TestCase):
+class PyFsCompatLayer:
+    """PyFilesystem2 Python 3.12 compatibility layer.
+
+    Adds a workaround for PyFilesystem2#568:
+    https://github.com/PyFilesystem/pyfilesystem2/issues/568
+    """
+
+    assertRaisesRegexp = TestCase.assertRaisesRegex
+
+class TestGoogleDriveFS(FSTestCases, TestCase, PyFsCompatLayer):
 	def make_fs(self):
 		self.fullFS = FullFS()
 		self.testSubdir = f'{_safeDirForTests}/{uuid4()}'
