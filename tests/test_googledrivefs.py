@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from hashlib import md5
 from io import BytesIO
 from json import load, loads
@@ -107,7 +107,7 @@ class TestGoogleDriveFS(FSTestCases, TestCase, PyFsCompatLayer):
 
 		self.fs.touch('touched-file.txt')
 
-		expirationDateTime = datetime.now(timezone.utc) + timedelta(minutes=5)
+		expirationDateTime = datetime.now(UTC) + timedelta(minutes=5)
 		subscriptionId = str(uuid4())
 		self.fs.watch('touched-file.txt', tunnel.public_url.replace('http://', 'https://'), subscriptionId, expirationDateTime)
 		info(f'Watching {subscriptionId}')
