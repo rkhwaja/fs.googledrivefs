@@ -102,7 +102,7 @@ class _UploadOnClose(RawWrapper):
 		super().close()  # close the file so that it's readable for upload
 		if self.parsedMode.writing:
 			# google doesn't accept the fractional second part
-			now = datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+			now = datetime.now(tz=UTC).replace(microsecond=0, tz=None).isoformat() + 'Z'
 			uploadMetadata = {'modifiedTime': now}
 			if self.thisMetadata is None:
 				uploadMetadata.update(
