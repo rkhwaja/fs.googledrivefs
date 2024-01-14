@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from io import BytesIO, SEEK_END
 from logging import getLogger
 from os import close, remove
@@ -102,7 +102,7 @@ class _UploadOnClose(RawWrapper):
 		super().close()  # close the file so that it's readable for upload
 		if self.parsedMode.writing:
 			# google doesn't accept the fractional second part
-			now = datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+			now = datetime.now(tz=UTC).replace(microsecond=0, tzinfo=None).isoformat() + 'Z'
 			uploadMetadata = {'modifiedTime': now}
 			if self.thisMetadata is None:
 				uploadMetadata.update(
@@ -338,7 +338,7 @@ class GoogleDriveFS(FS):
 					if namespace == 'details':
 						if name == 'modified':
 							# incoming datetimes should be utc timestamps, Google Drive expects RFC 3339
-							updatedData['modifiedTime'] = epoch_to_datetime(value).replace(tzinfo=timezone.utc).isoformat()
+							updatedData['modifiedTime'] = epoch_to_datetime(value).replace(tzinfo=UTC).isoformat()
 					elif namespace == 'google':
 						if name == 'indexableText':
 							updatedData['contentHints'] = {'indexableText': value}

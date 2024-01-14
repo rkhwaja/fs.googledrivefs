@@ -38,13 +38,14 @@ pyngrok = ">=7"
 pytest-localserver = ">=0.5.0"
 pytest-xdist = ">=3.2.1"
 ruff = ">=0.4.4"
+pytest-rerunfailures = ">=14.0"
 
 [tool.poe.tasks]
 lint = "ruff check fs/googledrivefs/ tests/"
 
 [tool.poe.tasks.test]
 shell = """
-pytest -n 4 --cov=fs/googledrivefs --timeout=2700 || exit 1
+pytest -n 4 --reruns 2 --only-rerun TimeoutError --cov=fs/googledrivefs --timeout=2700 || exit 1
 coverage xml
 """
 
@@ -57,7 +58,7 @@ coverage xml
 line-length = 200
 lint.ignore = ["ANN", "D", "DTZ", "EM102", "ERA001", "FBT002", "FIX", "G004", "I", "N", "PT009", "PT027", "PT013", "PTH", "S101", "TCH003", "TD", "TRY003", "W191"]
 lint.select = ["ALL"]
-target-version = "py37"
+target-version = "py38"
 
 [tool.ruff.lint.extend-per-file-ignores]
 "__init__.py" = ["F401"]
