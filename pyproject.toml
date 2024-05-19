@@ -38,10 +38,10 @@ poethepoet = ">=0.16.4"
 pyngrok = ">=7"
 pytest-localserver = ">=0.5.0"
 pytest-xdist = ">=3.2.1"
-ruff = ">=0.0.291"
+ruff = ">=0.4.4"
 
 [tool.poe.tasks]
-lint = "ruff fs/googledrivefs/ tests/"
+lint = "ruff check fs/googledrivefs/ tests/"
 
 [tool.poe.tasks.test]
 shell = """
@@ -56,15 +56,15 @@ coverage xml
 
 [tool.ruff]
 line-length = 200
-ignore = ["ANN", "D", "DTZ", "EM102", "ERA001", "FBT002", "FIX", "G004", "I", "N", "PT009", "PT027", "PT013", "PTH", "S101", "TCH003", "TD", "TRY003", "W191"]
-select = ["ALL"]
+lint.ignore = ["ANN", "D", "DTZ", "EM102", "ERA001", "FBT002", "FIX", "G004", "I", "N", "PT009", "PT027", "PT013", "PTH", "S101", "TCH003", "TD", "TRY003", "W191"]
+lint.select = ["ALL"]
 target-version = "py37"
 
-[tool.ruff.extend-per-file-ignores]
+[tool.ruff.lint.extend-per-file-ignores]
 "__init__.py" = ["F401"]
 "tests/*" = ["ANN201", "D103", "INP001", "PT006"]
 
-[tool.ruff.flake8-quotes]
+[tool.ruff.lint.flake8-quotes]
 inline-quotes = "single"
 multiline-quotes = "single"
 
