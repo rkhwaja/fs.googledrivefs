@@ -13,7 +13,7 @@ from .googledrivefs import GoogleDriveFS
 class GoogleDriveFSOpener(Opener):
 	protocols: ClassVar[list[str]] = ['googledrive']
 
-	def open_fs(self, fs_url, parse_result, writeable, create, cwd): # noqa: ARG002, PLR0913
+	def open_fs(self, fs_url, parse_result, writeable, create, cwd): # noqa: ARG002
 		directory = parse_result.resource
 
 		if 'access_token' in parse_result.params:

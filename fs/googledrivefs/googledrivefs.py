@@ -73,7 +73,7 @@ def _GenerateChildren(children, page):
 
 # TODO - switch to MediaIoBaseUpload and use BytesIO
 class _UploadOnClose(RawWrapper):
-	def __init__(self, fs, path, thisMetadata, parentMetadata, parsedMode, **options): # noqa: PLR0913
+	def __init__(self, fs, path, thisMetadata, parentMetadata, parsedMode, **options):
 		self.fs = fs
 		self.path = path
 		self.parentMetadata = parentMetadata
@@ -169,7 +169,7 @@ class SubGoogleDriveFS(SubFS):
 		fs, targetPathDelegate = self.delegate_path(target_path)
 		fs.add_shortcut(shortcutPathDelegate, targetPathDelegate)
 
-	def watch(self, path, notification_address, expiration=None, id=None, token=None): # noqa: A002, PLR0913
+	def watch(self, path, notification_address, expiration=None, id=None, token=None): # noqa: A002
 		fs, delegatePath = self.delegate_path(path)
 		fs.watch(delegatePath, notification_address, expiration, id, token)
 
@@ -227,7 +227,7 @@ class GoogleDriveFS(FS):
 			rawResults = self._fileQuery(condition())
 		return (_InfoFromMetadata(x) for x in rawResults)
 
-	def watch(self, path, notification_address, id, expiration=None, token=None): # noqa: A002, PLR0913
+	def watch(self, path, notification_address, id, expiration=None, token=None): # noqa: A002
 		path = self.validatepath(path)
 		metadataByPath = self._itemsFromPath(path)
 		if path not in metadataByPath:
@@ -452,7 +452,7 @@ class GoogleDriveFS(FS):
 		request = self._drive.files().get_media(fileId=metadata['id'])
 		self._download_request(path, request, file_obj, chunk_size)
 
-	def _export_as(self, path, metadata, file_obj, chunk_size, mimeType): # noqa: PLR0913
+	def _export_as(self, path, metadata, file_obj, chunk_size, mimeType):
 		assert metadata is not None
 		request = self._drive.files().export_media(fileId=metadata['id'], mimeType=mimeType)
 		self._download_request(path, request, file_obj, chunk_size)
