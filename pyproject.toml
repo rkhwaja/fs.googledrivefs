@@ -1,13 +1,10 @@
-[tool.poetry]
+[project]
 name = "fs.googledrivefs"
-packages = [
-    { include = "fs"}
-]
 version = "2.4.3"
 description = "Pyfilesystem2 implementation for Google Drive"
-authors = ["Rehan Khwaja <rehan@khwaja.name>"]
-license = "MIT"
-homepage = "https://github.com/rkhwaja/fs.googledrivefs"
+maintainers = [
+	{ name = "Rehan Khwaja", email = "rehan@khwaja.name" }
+]
 keywords = ["filesystem", "Pyfilesystem2", "google"]
 readme = "README.md"
 classifiers = [
@@ -18,27 +15,27 @@ classifiers = [
 	"Programming Language :: Python :: 3.9",
 	"Programming Language :: Python :: 3.10",
 	"Programming Language :: Python :: 3.11",
-	"Programming Language :: Python :: 3.12"
+	"Programming Language :: Python :: 3.12",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "fs>=2.4.13",
+    "google-api-python-client>=1.7.10",
+    "google-auth>=1.5.1",
 ]
 
-[tool.poetry.dependencies]
-python = ">=3.8"
-fs = ">=2.4.13"
-google-api-python-client = ">=1.7.10"
-google-auth = ">=1.5.1"
+[project.urls]
+Homepage = "https://github.com/rkhwaja/fs.googledrivefs"
 
-[tool.poetry.dev-dependencies]
-pytest = ">=7.2.0"
-pytest-timeout = ">=1.3.3"
-requests-oauthlib = ">=1.0"
-pyperclip = ">=1.7"
-pytest-cov = ">=2.10.1"
-poethepoet = ">=0.16.4"
-pyngrok = ">=7"
-pytest-localserver = ">=0.5.0"
-pytest-xdist = ">=3.2.1"
-ruff = ">=0.5.5"
-pytest-rerunfailures = ">=14.0"
+[project.entry-points."fs.opener"]
+"googledrive" = "fs.googledrivefs.opener:GoogleDriveFSOpener"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["fs"]
 
 [tool.poe.tasks]
 lint = "ruff check fs/googledrivefs/ tests/"
@@ -48,11 +45,6 @@ shell = """
 pytest -n 4 --reruns 2 --only-rerun TimeoutError --cov=fs/googledrivefs --timeout=2700 || exit 1
 coverage xml
 """
-
-[tool.poetry.plugins] # Optional super table
-
-[tool.poetry.plugins."fs.opener"]
-"googledrive" = "fs.googledrivefs.opener:GoogleDriveFSOpener"
 
 [tool.ruff]
 line-length = 200
@@ -68,6 +60,17 @@ target-version = "py38"
 inline-quotes = "single"
 multiline-quotes = "single"
 
-[build-system]
-requires = ["poetry_core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+[tool.uv]
+dev-dependencies = [
+    "poethepoet>=0.16.4",
+    "pyngrok>=7",
+    "pyperclip>=1.7",
+    "pytest-cov>=2.10.1",
+    "pytest-localserver>=0.5.0",
+    "pytest-rerunfailures>=14.0",
+    "pytest-timeout>=1.3.3",
+    "pytest-xdist>=3.2.1",
+    "pytest>=7.2.0",
+    "requests-oauthlib>=1.0",
+    "ruff>=0.5.5",
+]

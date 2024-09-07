@@ -3,7 +3,7 @@ __pycache__/
 
 # Distribution / packaging
 dist/
-poetry.lock
+uv.lock
 .venv
 *.egg-info
 pip-wheel-metadata
