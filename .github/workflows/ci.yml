@@ -43,19 +43,16 @@ jobs:
         python-version: [3.8, 3.9, "3.10", "3.11", "3.12", "3.13"]
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
+    - name: Checkout repository
+      uses: actions/checkout@v4
     - name: Install uv
-      uses: yezz123/setup-uv@v4
+      uses: astral-sh/setup-uv@v3
+    - name: Set up Python ${{ matrix.python-version }}
+      run: uv python install ${{ matrix.python-version }}
     - name: Dependencies
-      run: |
-        uv sync --no-cache
+      run: uv sync --no-cache
     - name: Lint
-      run: |
-        uv run poe lint
+      run: uv run poe lint
     - name: Tests
       env:
         GOOGLEDRIVEFS_TEST_CLIENT_ID: ${{ secrets.GOOGLEDRIVEFS_TEST_CLIENT_ID }}
@@ -64,7 +61,7 @@ jobs:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
       if: ${{needs.secrets.outputs.valid}} == 'true'
       run: |
-        if python --version | grep -q 'Python 3.13' ; then
+        if uv run python --version | grep -q 'Python 3.13' ; then
           uv run poe test
         fi
     - name: Coverage
