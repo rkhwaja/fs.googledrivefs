@@ -80,8 +80,8 @@ lint.select = ["ALL"]
 inline-quotes = "single"
 multiline-quotes = "single"
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "poethepoet>=0.16.4",
     "pyngrok>=7",
     "pyperclip>=1.7",
