@@ -7,8 +7,9 @@ maintainers = [
 ]
 keywords = ["filesystem", "Pyfilesystem2", "google"]
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 classifiers = [
-	"License :: OSI Approved :: MIT License",
 	"Development Status :: 5 - Production/Stable",
 	"Intended Audience :: Developers",
 	"Programming Language :: Python :: 3.8",
