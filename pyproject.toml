@@ -76,6 +76,9 @@ lint.select = ["ALL"]
 "__init__.py" = [
     "F401",     # Unused import
     ]
+"tests/*.py" = [
+    "LOG015",   # Disallows logging through root logger
+]
 
 [tool.ruff.lint.flake8-quotes]
 inline-quotes = "single"
@@ -93,5 +96,5 @@ dev = [
     "pytest-xdist>=3.2.1",
     "pytest>=7.2.0",
     "requests-oauthlib>=1.0",
-    "ruff>=0.5.5",
+    "ruff>=0.10.0",
 ]
