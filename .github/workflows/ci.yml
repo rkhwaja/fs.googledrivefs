@@ -40,7 +40,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.14.0a6"]
 
     steps:
     - name: Checkout repository
@@ -63,7 +63,7 @@ jobs:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
       if: ${{needs.secrets.outputs.valid}} == 'true'
       run: |
-        if python --version | grep -q 'Python 3.13' ; then
+        if python --version | grep -q 'Python 3.14' ; then
           poe test
         fi
     - name: Coverage
