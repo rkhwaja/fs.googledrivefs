@@ -62,7 +62,7 @@ def _InfoFromMetadata(metadata):
 	if 'md5Checksum' in metadata:
 		rawInfo.update({'hashes': {'MD5': metadata['md5Checksum']}})
 	if 'mimeType' in metadata:
-		googleMetadata.update({'isShortcut': metadata['mimeType'] == _shortcutMimeType})
+		googleMetadata.update({'isShortcut': metadata['mimeType'] == _shortcutMimeType, 'mimeType': metadata['mimeType']})
 	rawInfo.update({'google': googleMetadata})
 	# there is also file-type-specific metadata like imageMediaMetadata
 	return Info(rawInfo)
