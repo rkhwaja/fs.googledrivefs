@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from io import BytesIO, SEEK_END
 from logging import getLogger
 from os import close, remove
@@ -18,6 +18,7 @@ from fs.path import basename, dirname, iteratepath, join, split
 from fs.subfs import SubFS
 from fs.time import datetime_to_epoch, epoch_to_datetime
 
+UTC = timezone.utc
 _folderMimeType = 'application/vnd.google-apps.folder'
 _shortcutMimeType = 'application/vnd.google-apps.shortcut'
 _sharingUrl = 'https://drive.google.com/open?id='
