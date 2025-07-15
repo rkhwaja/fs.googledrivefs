@@ -3,6 +3,7 @@
 from json import dump, load
 from os import environ
 
+from pyperclip import copy
 from requests_oauthlib import OAuth2Session
 
 class TokenStorageFile:
@@ -33,7 +34,6 @@ def Authorize(clientId, clientSecret, tokenStoragePath):
 	print(f'Go to the following URL and authorize the app: {authorizationUrl}') # noqa: T201
 
 	try:
-		from pyperclip import copy
 		copy(authorizationUrl)
 		print('URL copied to clipboard') # noqa: T201
 	except ImportError:
