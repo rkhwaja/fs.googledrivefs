@@ -96,5 +96,5 @@ dev = [
     "pytest-xdist>=3.2.1",
     "pytest>=7.2.0",
     "requests-oauthlib>=1.0",
-    "ruff>=0.10.0",
+    "ruff>=0.12.3",
 ]
