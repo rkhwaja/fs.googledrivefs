@@ -1,6 +1,6 @@
 [project]
 name = "fs.googledrivefs"
-version = "2.4.4"
+version = "2.5.0"
 description = "Pyfilesystem2 implementation for Google Drive"
 maintainers = [
 	{ name = "Rehan Khwaja", email = "rehan@khwaja.name" }
