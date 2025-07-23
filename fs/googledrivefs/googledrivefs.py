@@ -111,6 +111,8 @@ class _UploadOnClose(RawWrapper):
 				if 'createdDateTime' in self.options:
 					uploadMetadata.update(
 						{'createdTime': self.options['createdDateTime'].replace(microsecond=0).isoformat() + 'Z'})
+				if 'mimetype' in self.options:
+					uploadMetadata.update({'mimeType': self.options['mimetype']})
 
 			with open(self.localPath, 'rb') as f:
 				dataToWrite = f.read()
@@ -138,24 +140,22 @@ class _UploadOnClose(RawWrapper):
 				while response is None:
 					status, response = request.next_chunk()
 					_log.debug(f'{status}: {response}')
-			else:
-				fh = BytesIO(b'')
-				media = MediaIoBaseUpload(fh, mimetype='application/octet-stream', chunksize=-1, resumable=False)
-				if self.thisMetadata is None:
+			elif self.thisMetadata is None:
 					createdFile = self.fs.google_resource().files().create(
 						body=uploadMetadata,
-						media_body=media,
 						**self.fs._file_kwargs,  # noqa: SLF001
 					).execute(num_retries=self.fs.retryCount)
 					_log.debug(f'Created empty file: {createdFile}')
-				else:
-					updatedFile = self.fs.google_resource().files().update(
-						fileId=self.thisMetadata['id'],
-						body={},
-						media_body=media,
-						**self.fs._file_kwargs,  # noqa: SLF001
-					).execute(num_retries=self.fs.retryCount)
-					_log.debug(f'Updated file to empty: {updatedFile}')
+			else:
+				fh = BytesIO(b'')
+				media = MediaIoBaseUpload(fh, mimetype='application/octet-stream', chunksize=-1, resumable=False)
+				updatedFile = self.fs.google_resource().files().update(
+					fileId=self.thisMetadata['id'],
+					body={},
+					media_body=media,
+					**self.fs._file_kwargs,  # noqa: SLF001
+				).execute(num_retries=self.fs.retryCount)
+				_log.debug(f'Updated file to empty: {updatedFile}')
 		remove(self.localPath)
 
 class SubGoogleDriveFS(SubFS):
