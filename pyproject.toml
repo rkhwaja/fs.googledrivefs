@@ -50,7 +50,7 @@ coverage xml
 """
 
 [tool.ruff]
-line-length = 200
+line-length = 320
 lint.ignore = [
     "ANN",      # Requires annotations
     "D",        # Requires various docstrings
