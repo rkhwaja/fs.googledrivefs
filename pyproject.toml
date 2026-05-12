@@ -1,6 +1,6 @@
 [project]
 name = "fs.googledrivefs"
-version = "2.6.1"
+version = "2.6.2"
 description = "Pyfilesystem2 implementation for Google Drive"
 maintainers = [
 	{ name = "Rehan Khwaja", email = "rehan@khwaja.name" }
@@ -100,4 +100,9 @@ dev = [
     "pytest>=7.2.0",
     "requests-oauthlib>=1.0",
     "ruff>=0.12.3",
+]
+
+[tool.uv]
+constraint-dependencies = [
+    "setuptools<81",
 ]
