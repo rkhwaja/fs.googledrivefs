@@ -41,6 +41,7 @@ build-backend = "hatchling.build"
 packages = ["fs"]
 
 [tool.poe.tasks]
+audit = "pysentry-rs ."
 lint = "ruff check fs/googledrivefs/ tests/"
 
 [tool.poe.tasks.test]
@@ -90,6 +91,7 @@ dev = [
     "poethepoet>=0.16.4",
     "pyngrok>=7",
     "pyperclip>=1.7",
+    "pysentry-rs>=0.3.7",
     "pytest-cov>=2.10.1",
     "pytest-localserver>=0.5.0",
     "pytest-rerunfailures>=14.0",
