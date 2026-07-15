@@ -108,3 +108,8 @@ constraint-dependencies = [
     "urllib3>=2.7.0",
     "werkzeug>=3.1.6",
 ]
+
+[tool.pysentry.ignore]
+ids = [
+    "PYSEC-2026-3447", # can't fix pyfilesystem
+    ]
