@@ -52,6 +52,7 @@ coverage xml
 line-length = 320
 lint.ignore = [
     "ANN",      # Requires annotations
+	"CPY001",   # requires copyright notices
     "D",        # Requires various docstrings
     "DTZ",      # flake8-datetimez
     "EM102",    # Disallows f-strings in exceptions
@@ -97,7 +98,7 @@ dev = [
     "pytest-xdist>=3.2.1",
     "pytest>=9.0.3",
     "requests-oauthlib>=1.0",
-    "ruff>=0.12.3",
+    "ruff>=0.16.1",
 ]
 
 [tool.uv]
