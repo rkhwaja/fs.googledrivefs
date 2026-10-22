@@ -102,15 +102,6 @@ dev = [
     "ruff>=0.16.1",
 ]
 
-[tool.uv]
-constraint-dependencies = [
-    "requests>=2.33.0",
-    "setuptools>=78.1.1",
-    "setuptools<81",
-    "urllib3>=2.7.0",
-    "werkzeug>=3.1.6",
-]
-
 [tool.pysentry.ignore]
 ids = [
     "PYSEC-2026-3447", # can't fix pyfilesystem
