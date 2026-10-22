@@ -21,9 +21,8 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
         activate-environment: true
-        resolution-strategy: "lowest" # to test the bounds in pyproject.toml
     - name: Dependencies
       run: |
-        uv sync
+        uv sync --resolution lowest-direct
     - name: Audit
-      run: poe audit
+      run: poe audit --direct-only

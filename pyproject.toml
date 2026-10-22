@@ -91,7 +91,7 @@ dev = [
     "poethepoet>=0.16.4",
     "pyngrok>=7",
     "pyperclip>=1.7",
-    "pysentry-rs>=0.3.7",
+    "pysentry-rs>=0.5.0",
     "pytest-cov>=2.10.1",
     "pytest-localserver>=0.5.0",
     "pytest-rerunfailures>=14.0",
@@ -100,15 +100,6 @@ dev = [
     "pytest>=9.0.3",
     "requests-oauthlib>=1.0",
     "ruff>=0.16.1",
-]
-
-[tool.uv]
-constraint-dependencies = [
-    "requests>=2.33.0",
-    "setuptools>=78.1.1",
-    "setuptools<81",
-    "urllib3>=2.7.0",
-    "werkzeug>=3.1.6",
 ]
 
 [tool.pysentry.ignore]
