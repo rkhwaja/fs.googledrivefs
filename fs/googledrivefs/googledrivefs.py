@@ -430,6 +430,8 @@ class GoogleDriveFS(FS):
 		_log.info(f'openbin({path}, {mode}, {buffering}, {options})')
 		path = self.validatepath(path)
 		with self._lock:
+			if 't' in mode:
+				raise ValueError('Text mode is not allowed in openbin')
 			parsedMode = Mode(mode)
 			idsFromPath = self._itemsFromPath(path)
 			item = idsFromPath.get(path)
