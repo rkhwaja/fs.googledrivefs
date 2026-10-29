@@ -18,7 +18,7 @@ from fs.test import FSTestCases
 from fs.time import datetime_to_epoch
 from google.auth import default
 from google.oauth2.credentials import Credentials
-from pyngrok import conf, ngrok
+from ngrok import forward
 from pytest import fixture, mark, raises
 from pytest_localserver.http import WSGIServer
 
@@ -96,20 +96,20 @@ class TestGoogleDriveFS(FSTestCases, TestCase, PyFsCompatLayer):
 	def destroy_fs(self, _):
 		self.fullFS.removetree(self.testSubdir)
 
+	@mark.skipif('NGROK_AUTHTOKEN' not in environ, reason='Missing NGROK_AUTHTOKEN environment variable')
 	@mark.usefixtures('testserver')
 	def test_webhooks(self):
 		port = urlparse(self.server.url).port
 		info(f'port={port}')
 		info(f'self.server.url={self.server.url}')
-		conf.get_default().auth_token = environ['NGROK_AUTH_TOKEN']
-		tunnel = ngrok.connect(port, bind_tls=True)
-		info(f'tunnel={tunnel}')
+		listener = forward(port, authtoken_from_env=True)
+		info(f'publicUrl: {listener.url()}')
 
 		self.fs.touch('touched-file.txt')
 
 		expirationDateTime = datetime.now(UTC) + timedelta(minutes=5)
 		subscriptionId = str(uuid4())
-		self.fs.watch('touched-file.txt', tunnel.public_url.replace('http://', 'https://'), subscriptionId, expirationDateTime)
+		self.fs.watch('touched-file.txt', listener.url().replace('http://', 'https://'), subscriptionId, expirationDateTime)
 		info(f'Watching {subscriptionId}')
 		with self.fs.open('touched-file.txt', 'w') as f:
 			f.write('Some text')
