@@ -89,7 +89,7 @@ multiline-quotes = "single"
 [dependency-groups]
 dev = [
     "poethepoet>=0.16.4",
-    "pyngrok>=7",
+    "ngrok>=1.4.0",
     "pyperclip>=1.7",
     "pysentry-rs>=0.3.7",
     "pytest-cov>=2.10.1",
