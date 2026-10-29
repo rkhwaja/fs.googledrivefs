@@ -56,7 +56,7 @@ lint.ignore = [
 	"CPY001",   # requires copyright notices
     "D",        # Requires various docstrings
     "DTZ",      # flake8-datetimez
-    "EM102",    # Disallows f-strings in exceptions
+    "EM",       # Disallows using a string literal for exceptions
     "ERA001",   # Disallows commented out code
     "FBT002",   # Disallows boolean positional arguments
     "FIX",      # Disallows FIXME-type comments
