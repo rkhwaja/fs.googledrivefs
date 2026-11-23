@@ -1,6 +1,6 @@
 [project]
 name = "fs.googledrivefs"
-version = "2.6.3"
+version = "3.0.0"
 description = "Pyfilesystem2 implementation for Google Drive"
 maintainers = [
 	{ name = "Rehan Khwaja", email = "rehan@khwaja.name" }
@@ -21,7 +21,7 @@ classifiers = [
 ]
 requires-python = ">=3.10"
 dependencies = [
-    "fs>=2.4.13",
+    "fitzyracing-fs>=2.4.18",
     "google-api-python-client>=1.7.10",
     "google-auth>=1.5.1",
 ]
@@ -91,7 +91,7 @@ dev = [
     "poethepoet>=0.16.4",
     "ngrok>=1.4.0",
     "pyperclip>=1.7",
-    "pysentry-rs>=0.3.7",
+    "pysentry-rs>=0.5.0",
     "pytest-cov>=2.10.1",
     "pytest-localserver>=0.5.0",
     "pytest-rerunfailures>=14.0",
@@ -104,14 +104,19 @@ dev = [
 
 [tool.uv]
 constraint-dependencies = [
+    "certifi>=2026.10.18",
+    "cryptography>=50.0.0",
+    "httplib2>=0.32.0",
+    "idna>=3.15",
+    "oauthlib>=4.0.1",
+    "pyasn1>=0.6.5",
+    "pygments>=2.20.0",
     "requests>=2.33.0",
-    "setuptools>=78.1.1",
-    "setuptools<81",
-    "urllib3>=2.7.0",
-    "werkzeug>=3.1.6",
+    "rsa>=4.7",
+    "urllib3>=2.8.0",
+    "werkzeug>=3.1.9",
 ]
 
 [tool.pysentry.ignore]
 ids = [
-    "PYSEC-2026-3447", # can't fix pyfilesystem
     ]
